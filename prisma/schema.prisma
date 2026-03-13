@@ -1,0 +1,21 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String   // Phone number for WA or Chat ID for Telegram
+  platform    String   // 'whatsapp' | 'telegram'
+  type        String   // 'income' | 'expense'
+  amount      Float
+  description String
+  timestamp   DateTime @default(now())
+}
