@@ -89,13 +89,19 @@ async function connectToWhatsApp() {
           m.templateButtonReplyMessage?.selectedId || 
           '';
 
-        // Cek Interactive Response (Format Menu Baru)
+        // Cek Poll Update (Untuk menu tombol via Poll)
+        if (m.pollUpdateMessage) {
+            // Poll biasanya diproses via 'messages.update', tapi kita tambahkan basic check di sini
+            // Untuk flow poll, kita akan kirim poll dan tangkap di flow biasa
+        }
+
+        // Cek Interactive Response
         if (m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
           const params = JSON.parse(m.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
           if (params.id) text = params.id;
         }
 
-        // Cek ViewOnce (Beberapa tombol dibungkus ini)
+        // Cek ViewOnce
         if (!text && m.viewOnceMessage?.message) {
           const v = m.viewOnceMessage.message;
           text = v.conversation || v.extendedTextMessage?.text || '';
@@ -131,28 +137,12 @@ async function connectToWhatsApp() {
         userStates.set(userId, { step: 'AWAITING_TYPE' });
         
         await sock.sendMessage(from, {
-          viewOnceMessage: {
-            message: {
-              interactiveMessage: {
-                header: { title: "*Tambah Transaksi*", hasMediaAttachment: false },
-                body: { text: "Silakan pilih tipe transaksi di bawah ini:" },
-                footer: { text: "Catur Finance Bot" },
-                nativeFlowMessage: {
-                  buttons: [
-                    {
-                      name: "quick_reply",
-                      buttonParamsJson: JSON.stringify({ display_text: "💰 Pemasukan (Income)", id: "1" })
-                    },
-                    {
-                      name: "quick_reply",
-                      buttonParamsJson: JSON.stringify({ display_text: "💸 Pengeluaran (Expense)", id: "2" })
-                    }
-                  ]
-                }
-              }
-            }
+          poll: {
+            name: "Pilih tipe transaksi:",
+            values: ["Pemasukan (Income)", "Pengeluaran (Expense)"],
+            selectableCount: 1
           }
-        } as any);
+        });
         continue;
       }
 
@@ -190,99 +180,40 @@ async function connectToWhatsApp() {
 
       if (command === '!help' || command === '!menu') {
         await sock.sendMessage(from, {
-          viewOnceMessage: {
-            message: {
-              interactiveMessage: {
-                header: { title: "*Catur Finance Bot*", hasMediaAttachment: false },
-                body: { text: "Halo! Pilih menu di bawah ini untuk mengelola keuanganmu:\n\nMode: *Interactive Menu*" },
-                footer: { text: "© Catur Finance Bot" },
-                nativeFlowMessage: {
-                  buttons: [
-                    {
-                      name: "single_select",
-                      buttonParamsJson: JSON.stringify({
-                        title: "Buka Menu Utama",
-                        sections: [
-                          {
-                            title: "Transaksi & Laporan",
-                            rows: [
-                              { title: "➕ Tambah Transaksi", description: "Catat pemasukan/pengeluaran baru", id: "!add" },
-                              { title: "📊 Rekap Harian", description: "Lihat ringkasan transaksi hari ini", id: "!summary daily" },
-                              { title: "📅 Rekap Bulanan", description: "Lihat ringkasan transaksi bulan ini", id: "!summary monthly" },
-                              { title: "📤 Export Sheets", description: "Export data ke Google Sheets", id: "!export" },
-                            ]
-                          }
-                        ]
-                      })
-                    }
-                  ]
-                }
-              }
-            }
+          poll: {
+            name: "Catur Finance Bot 💰\nSilakan pilih menu:",
+            values: ["!add", "!summary daily", "!summary monthly", "!export"],
+            selectableCount: 1
           }
-        } as any);
+        });
         continue;
       }
 
       // === CONVERSATION FLOW ===
       if (state) {
         if (state.step === 'AWAITING_TYPE') {
-          if (text === '1') {
+          if (text === '1' || text.toLowerCase().includes('pemasukan')) {
             state.step = 'AWAITING_SOURCE';
             state.type = 'income';
-            
             const incomeSources = ['Gaji Catur', 'Gaji Vermita', 'Panvers Store', 'THR Catur', 'THR Vermita', 'Lainnya'];
-            const rows = incomeSources.map((s, i) => ({
-              title: s,
-              id: (i + 1).toString()
-            }));
-
             await sock.sendMessage(from, {
-              viewOnceMessage: {
-                message: {
-                  interactiveMessage: {
-                    body: { text: "Pilih sumber pemasukan:" },
-                    nativeFlowMessage: {
-                      buttons: [{
-                        name: "single_select",
-                        buttonParamsJson: JSON.stringify({
-                          title: "Pilih Sumber",
-                          sections: [{ title: "Sumber Pemasukan", rows }]
-                        })
-                      }]
-                    }
-                  }
-                }
+              poll: {
+                name: "Pilih sumber pemasukan:",
+                values: incomeSources,
+                selectableCount: 1
               }
-            } as any);
-          } else if (text === '2') {
+            });
+          } else if (text === '2' || text.toLowerCase().includes('pengeluaran')) {
             state.step = 'AWAITING_SOURCE';
             state.type = 'expense';
-            
             const expenseSources = ['Makanan & Minuman', 'Entertaint', 'Sedekah', 'Listrik', 'Laundry', 'Kontrakan', 'Cicilan', 'Orang Tua', 'Transportasi', 'Uang Harian'];
-            const rows = expenseSources.map((s, i) => ({
-              title: s,
-              id: (i + 1).toString()
-            }));
-
             await sock.sendMessage(from, {
-              viewOnceMessage: {
-                message: {
-                  interactiveMessage: {
-                    body: { text: "Pilih jenis pengeluaran:" },
-                    nativeFlowMessage: {
-                      buttons: [{
-                        name: "single_select",
-                        buttonParamsJson: JSON.stringify({
-                          title: "Pilih Jenis",
-                          sections: [{ title: "Jenis Pengeluaran", rows }]
-                        })
-                      }]
-                    }
-                  }
-                }
+              poll: {
+                name: "Pilih jenis pengeluaran:",
+                values: expenseSources,
+                selectableCount: 1
               }
-            } as any);
+            });
           } else {
             await reply('❌ Pilihan tidak valid. Silakan pilih dari menu yang muncul.');
           }
@@ -298,29 +229,13 @@ async function connectToWhatsApp() {
             if (state.type === 'expense') {
               state.step = 'AWAITING_PAYMETH';
               const paymentMethods = ['BCA', 'BRI', 'MANDIRI', 'CASH', 'SEABANK', 'OVO', 'DANA', 'BLU', 'GOPAY', 'JAGO'];
-              const rows = paymentMethods.map((p, i) => ({
-                title: p,
-                id: (i + 1).toString()
-              }));
-
               await sock.sendMessage(from, {
-                viewOnceMessage: {
-                  message: {
-                    interactiveMessage: {
-                      body: { text: `Pilih Metode Pembayaran untuk *${sources[index]}*:` },
-                      nativeFlowMessage: {
-                        buttons: [{
-                          name: "single_select",
-                          buttonParamsJson: JSON.stringify({
-                            title: "Pilih Metode",
-                            sections: [{ title: "Metode Pembayaran", rows }]
-                          })
-                        }]
-                      }
-                    }
-                  }
+                poll: {
+                  name: `Pilih Metode Pembayaran untuk *${sources[index]}*:`,
+                  values: paymentMethods,
+                  selectableCount: 1
                 }
-              } as any);
+              });
             } else {
               state.step = 'AWAITING_DESC';
               await reply(`Masukkan deskripsi untuk *${sources[index]}*\n(Contoh: Gaji Maret, atau ketik - untuk skip)`);
