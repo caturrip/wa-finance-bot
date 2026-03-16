@@ -1,15 +1,63 @@
 import { Telegraf, Markup } from 'telegraf';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
+import { inferTransactionFromText, parseAmount } from './utils';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
 const userStates = new Map<string, { step: string, type?: string, source?: string, payment?: string, desc?: string }>();
 
 bot.start((ctx) => {
-  ctx.reply('Selamat datang di Catur Finance Bot! Gunakan perintah berikut:\n\n/add - Tambah transaksi baru\n/summary <daily/monthly> - Rekap transaksi\n/export - Export ke Google Sheets');
+  ctx.reply('Selamat datang di Catur Finance Bot! Gunakan perintah berikut:\n\n/add - Tambah transaksi baru (atau: /add income 50000 Gaji)\n/summary <daily/monthly> - Rekap transaksi\n/export - Export ke Google Sheets');
 });
 
-bot.command('add', (ctx) => {
+bot.command('add', async (ctx) => {
+  const messageText = ctx.message.text || '';
+  const parts = messageText.trim().split(/\s+/);
+
+  // Quick-add automation: /add <income|expense> <amount> [source] [description...]
+  if (parts.length > 2) {
+    const typeArg = parts[1].toLowerCase();
+    if (typeArg === 'income' || typeArg === 'expense') {
+      let amount: number | null = null;
+      let amountIndex = -1;
+
+      for (let i = parts.length - 1; i >= 2; i--) {
+        const parsed = parseAmount(parts[i]);
+        if (!isNaN(parsed)) {
+          amount = parsed;
+          amountIndex = i;
+          break;
+        }
+      }
+
+      if (amount !== null && amountIndex > 1) {
+        const sourceTokens = parts.slice(2, amountIndex);
+        const descTokens = parts.slice(amountIndex + 1);
+
+        const source = sourceTokens.length ? sourceTokens.join(' ') : 'Auto';
+        const desc = descTokens.length ? descTokens.join(' ') : '';
+        const finalDescription = `${source}|${desc}`;
+
+        try {
+          await addTransaction({
+            userId: ctx.from.id.toString(),
+            platform: 'telegram',
+            type: typeArg as 'income' | 'expense',
+            amount,
+            description: finalDescription,
+          });
+          return ctx.reply(
+            `✅ Berhasil mencatat ${typeArg === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${source}${desc ? ` - ${desc}` : ''}).`
+          );
+        } catch (error: any) {
+          console.error('Error when saving transaction (quick add):', error);
+          const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
+          return ctx.reply(`❌ Terjadi kesalahan saat mencatat transaksi.${message}`);
+        }
+      }
+    }
+  }
+
   userStates.set(ctx.from.id.toString(), { step: 'AWAITING_TYPE' });
   ctx.reply('Pilih tipe transaksi:', Markup.inlineKeyboard([
     [
@@ -87,13 +135,36 @@ bot.on('text', async (ctx, next) => {
   const userId = ctx.from.id.toString();
   const state = userStates.get(userId);
 
+  // Automation: coba deteksi transaksi dari teks biasa (misal "Beli Astor 25rb")
+  if (!state) {
+    const inferred = inferTransactionFromText(ctx.message.text);
+    if (inferred) {
+      try {
+        await addTransaction({
+          userId,
+          platform: 'telegram',
+          type: inferred.type,
+          amount: inferred.amount,
+          description: `${inferred.source}|${inferred.description}`,
+        });
+        return ctx.reply(
+          `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).`
+        );
+      } catch (error: any) {
+        console.error('Error when saving transaction (auto):', error);
+        const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
+        return ctx.reply(`❌ Terjadi kesalahan saat mencatat transaksi otomatis.${message}`);
+      }
+    }
+  }
+
   if (state && state.step === 'AWAITING_DESC') {
     state.desc = ctx.message.text === '-' ? '' : ctx.message.text;
     state.step = 'AWAITING_AMOUNT';
     const label = state.payment ? `*${state.source}* via *${state.payment}*` : `*${state.source}*`;
     return ctx.reply(`Masukkan jumlah uang untuk ${label}\n(Contoh: 50000)`, { parse_mode: 'Markdown' });
   } else if (state && state.step === 'AWAITING_AMOUNT') {
-    const amount = parseFloat(ctx.message.text);
+    const amount = parseAmount(ctx.message.text);
     if (isNaN(amount)) {
       return ctx.reply('Jumlah harus berupa angka. Silakan masukkan nominal yang benar (Contoh: 50000):');
     }

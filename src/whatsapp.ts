@@ -9,6 +9,7 @@ import pino from 'pino';
 import * as QRCode from 'qrcode-terminal';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
+import { inferTransactionFromText, parseAmount } from './utils';
 
 const logger = pino({ level: 'info' }); // Diubah ke info untuk melihat log penting
 
@@ -106,6 +107,52 @@ async function connectToWhatsApp() {
       }
 
       if (command === '!add') {
+        // Quick-add automation: !add <income|expense> <amount> [source] [description...]
+        if (args.length > 2) {
+          const typeArg = args[1].toLowerCase();
+          if (typeArg === 'income' || typeArg === 'expense') {
+            // Temukan token angka terakhir yang valid sebagai amount
+            let amount: number | null = null;
+            let amountIndex = -1;
+            for (let i = args.length - 1; i >= 2; i--) {
+              const parsed = parseAmount(args[i]);
+              if (!isNaN(parsed)) {
+                amount = parsed;
+                amountIndex = i;
+                break;
+              }
+            }
+
+            if (amount !== null && amountIndex > 1) {
+              const sourceTokens = args.slice(2, amountIndex);
+              const descTokens = args.slice(amountIndex + 1);
+
+              const source = sourceTokens.length ? sourceTokens.join(' ') : 'Auto';
+              const desc = descTokens.length ? descTokens.join(' ') : '';
+              const finalDescription = `${source}|${desc}`;
+
+              try {
+                await addTransaction({
+                  userId,
+                  platform: 'whatsapp',
+                  type: typeArg as 'income' | 'expense',
+                  amount,
+                  description: finalDescription,
+                });
+                await reply(
+                  `✅ Berhasil mencatat ${typeArg === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${source}${desc ? ` - ${desc}` : ''}).`
+                );
+                continue;
+              } catch (error: any) {
+                console.error('Error when saving transaction (quick add):', error);
+                const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
+                await reply(`❌ Terjadi kesalahan saat mencatat transaksi.${message}`);
+                continue;
+              }
+            }
+          }
+        }
+
         userStates.set(userId, { step: 'AWAITING_TYPE' });
         await reply(
           `Pilih tipe transaksi (Balas angka):\n\n1️⃣ Pemasukan (Income)\n2️⃣ Pengeluaran (Expense)`
@@ -150,12 +197,38 @@ async function connectToWhatsApp() {
       if (command === '!help' || command === '!menu') {
         await reply(
           'Catur Finance Bot 💰\n\n' +
-          '!add → Tambah transaksi baru\n' +
+          '!add → Tambah transaksi baru (atau: !add income 50000 Gaji)\n' +
           '!summary daily → Rekap hari ini\n' +
           '!summary monthly → Rekap bulan ini\n' +
           '!export → Export ke Google Sheets'
         );
         continue;
+      }
+
+      // === AUTOMATION: coba parse transaksi dari teks biasa (misal "Beli Astor 25rb") ===
+      const isCommandMessage = command.startsWith('!');
+      if (!isCommandMessage && !state) {
+        const inferred = inferTransactionFromText(text);
+        if (inferred) {
+          try {
+            await addTransaction({
+              userId,
+              platform: 'whatsapp',
+              type: inferred.type,
+              amount: inferred.amount,
+              description: `${inferred.source}|${inferred.description}`,
+            });
+            await reply(
+              `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).`
+            );
+            continue;
+          } catch (error: any) {
+            console.error('Error when saving transaction (auto):', error);
+            const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
+            await reply(`❌ Terjadi kesalahan saat mencatat transaksi otomatis.${message}`);
+            continue;
+          }
+        }
       }
 
       // === CONVERSATION FLOW ===
@@ -219,32 +292,6 @@ async function connectToWhatsApp() {
           await reply(`Masukkan jumlah uang untuk ${label}\n(Contoh: 50000)`);
 
         } else if (state.step === 'AWAITING_AMOUNT') {
-          const parseAmount = (raw: string) => {
-            // Normalisasi format angka Indonesia (contoh: 50.000,00 / 50.000)
-            let normalized = raw.trim();
-            // Hapus prefix seperti "Rp" dan spasi
-            normalized = normalized.replace(/^[^0-9-]+/, '').replace(/\s+/g, '');
-
-            // Jika ada koma dan titik, anggap titik sebagai pemisah ribuan dan koma sebagai desimal
-            if (normalized.includes(',') && normalized.includes('.')) {
-              normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
-            } else if (normalized.includes('.') && !normalized.includes(',')) {
-              // Jika hanya ada titik: tentukan apakah titik sebagai pemisah ribuan
-              const parts = normalized.split('.');
-              const lastLen = parts[parts.length - 1].length;
-              if (lastLen === 3) {
-                // Kemungkinan format ribuan (misal 50.000)
-                normalized = parts.join('');
-              }
-              // Kalau bukan 3 digit (misal 1234.56), biarkan sebagai desimal
-            } else if (normalized.includes(',') && !normalized.includes('.')) {
-              // Jika hanya ada koma: anggap sebagai desimal
-              normalized = normalized.replace(/,/g, '.');
-            }
-
-            return parseFloat(normalized);
-          };
-
           const amount = parseAmount(text);
           if (isNaN(amount)) {
             await reply('❌ Jumlah harus berupa angka (Contoh: 50000 atau 50.000).');
