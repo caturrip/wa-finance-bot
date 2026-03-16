@@ -81,35 +81,7 @@ async function connectToWhatsApp() {
       let text = '';
       try {
         const m = msg.message;
-        text = 
-          m.conversation || 
-          m.extendedTextMessage?.text || 
-          m.buttonsResponseMessage?.selectedButtonId || 
-          m.listResponseMessage?.singleSelectReply?.selectedRowId || 
-          m.templateButtonReplyMessage?.selectedId || 
-          '';
-
-        // Cek Poll Update (Untuk menu tombol via Poll)
-        if (m.pollUpdateMessage) {
-            // Poll biasanya diproses via 'messages.update', tapi kita tambahkan basic check di sini
-            // Untuk flow poll, kita akan kirim poll dan tangkap di flow biasa
-        }
-
-        // Cek Interactive Response
-        if (m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
-          const params = JSON.parse(m.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-          if (params.id) text = params.id;
-        }
-
-        // Cek ViewOnce
-        if (!text && m.viewOnceMessage?.message) {
-          const v = m.viewOnceMessage.message;
-          text = v.conversation || v.extendedTextMessage?.text || '';
-          if (v.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
-            const params = JSON.parse(v.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-            if (params.id) text = params.id;
-          }
-        }
+        text = m.conversation || m.extendedTextMessage?.text || '';
       } catch (e) {
         console.error('Error extracting message text:', e);
       }
@@ -135,14 +107,9 @@ async function connectToWhatsApp() {
 
       if (command === '!add') {
         userStates.set(userId, { step: 'AWAITING_TYPE' });
-        
-        await sock.sendMessage(from, {
-          poll: {
-            name: "Pilih tipe transaksi:",
-            values: ["Pemasukan (Income)", "Pengeluaran (Expense)"],
-            selectableCount: 1
-          }
-        });
+        await reply(
+          `Pilih tipe transaksi (Balas angka):\n\n1️⃣ Pemasukan (Income)\n2️⃣ Pengeluaran (Expense)`
+        );
         continue;
       }
 
@@ -179,43 +146,33 @@ async function connectToWhatsApp() {
       }
 
       if (command === '!help' || command === '!menu') {
-        await sock.sendMessage(from, {
-          poll: {
-            name: "Catur Finance Bot 💰\nSilakan pilih menu:",
-            values: ["!add", "!summary daily", "!summary monthly", "!export"],
-            selectableCount: 1
-          }
-        });
+        await reply(
+          'Catur Finance Bot 💰\n\n' +
+          '!add → Tambah transaksi baru\n' +
+          '!summary daily → Rekap hari ini\n' +
+          '!summary monthly → Rekap bulan ini\n' +
+          '!export → Export ke Google Sheets'
+        );
         continue;
       }
 
       // === CONVERSATION FLOW ===
       if (state) {
         if (state.step === 'AWAITING_TYPE') {
-          if (text === '1' || text.toLowerCase().includes('pemasukan')) {
+          if (text === '1') {
             state.step = 'AWAITING_SOURCE';
             state.type = 'income';
-            const incomeSources = ['Gaji Catur', 'Gaji Vermita', 'Panvers Store', 'THR Catur', 'THR Vermita', 'Lainnya'];
-            await sock.sendMessage(from, {
-              poll: {
-                name: "Pilih sumber pemasukan:",
-                values: incomeSources,
-                selectableCount: 1
-              }
-            });
-          } else if (text === '2' || text.toLowerCase().includes('pengeluaran')) {
+            await reply(
+              `Pilih sumber pemasukan (Balas angka):\n\n1️⃣ Gaji Catur\n2️⃣ Gaji Vermita\n3️⃣ Panvers Store\n4️⃣ THR Catur\n5️⃣ THR Vermita\n6️⃣ Lainnya`
+            );
+          } else if (text === '2') {
             state.step = 'AWAITING_SOURCE';
             state.type = 'expense';
-            const expenseSources = ['Makanan & Minuman', 'Entertaint', 'Sedekah', 'Listrik', 'Laundry', 'Kontrakan', 'Cicilan', 'Orang Tua', 'Transportasi', 'Uang Harian'];
-            await sock.sendMessage(from, {
-              poll: {
-                name: "Pilih jenis pengeluaran:",
-                values: expenseSources,
-                selectableCount: 1
-              }
-            });
+            await reply(
+              `Pilih jenis pengeluaran (Balas angka):\n\n1️⃣ Makanan & Minuman\n2️⃣ Entertaint\n3️⃣ Sedekah\n4️⃣ Listrik\n5️⃣ Laundry\n6️⃣ Kontrakan\n7️⃣ Cicilan\n8️⃣ Orang Tua\n9️⃣ Transportasi\n🔟 Uang Harian`
+            );
           } else {
-            await reply('❌ Pilihan tidak valid. Silakan pilih dari menu yang muncul.');
+            await reply('❌ Pilihan tidak valid. Balas dengan angka 1 atau 2.');
           }
 
         } else if (state.step === 'AWAITING_SOURCE') {
@@ -228,14 +185,9 @@ async function connectToWhatsApp() {
             state.source = sources[index];
             if (state.type === 'expense') {
               state.step = 'AWAITING_PAYMETH';
-              const paymentMethods = ['BCA', 'BRI', 'MANDIRI', 'CASH', 'SEABANK', 'OVO', 'DANA', 'BLU', 'GOPAY', 'JAGO'];
-              await sock.sendMessage(from, {
-                poll: {
-                  name: `Pilih Metode Pembayaran untuk *${sources[index]}*:`,
-                  values: paymentMethods,
-                  selectableCount: 1
-                }
-              });
+              await reply(
+                `Pilih Metode Pembayaran (Balas angka):\n\n1️⃣ BCA\n2️⃣ BRI\n3️⃣ MANDIRI\n4️⃣ CASH\n5️⃣ SEABANK\n6️⃣ OVO\n7️⃣ DANA\n8️⃣ BLU\n9️⃣ GOPAY\n🔟 JAGO`
+              );
             } else {
               state.step = 'AWAITING_DESC';
               await reply(`Masukkan deskripsi untuk *${sources[index]}*\n(Contoh: Gaji Maret, atau ketik - untuk skip)`);
