@@ -217,9 +217,35 @@ async function connectToWhatsApp() {
           await reply(`Masukkan jumlah uang untuk ${label}\n(Contoh: 50000)`);
 
         } else if (state.step === 'AWAITING_AMOUNT') {
-          const amount = parseFloat(text);
+          const parseAmount = (raw: string) => {
+            // Normalisasi format angka Indonesia (contoh: 50.000,00 / 50.000)
+            let normalized = raw.trim();
+            // Hapus prefix seperti "Rp" dan spasi
+            normalized = normalized.replace(/^[^0-9-]+/, '').replace(/\s+/g, '');
+
+            // Jika ada koma dan titik, anggap titik sebagai pemisah ribuan dan koma sebagai desimal
+            if (normalized.includes(',') && normalized.includes('.')) {
+              normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
+            } else if (normalized.includes('.') && !normalized.includes(',')) {
+              // Jika hanya ada titik: tentukan apakah titik sebagai pemisah ribuan
+              const parts = normalized.split('.');
+              const lastLen = parts[parts.length - 1].length;
+              if (lastLen === 3) {
+                // Kemungkinan format ribuan (misal 50.000)
+                normalized = parts.join('');
+              }
+              // Kalau bukan 3 digit (misal 1234.56), biarkan sebagai desimal
+            } else if (normalized.includes(',') && !normalized.includes('.')) {
+              // Jika hanya ada koma: anggap sebagai desimal
+              normalized = normalized.replace(/,/g, '.');
+            }
+
+            return parseFloat(normalized);
+          };
+
+          const amount = parseAmount(text);
           if (isNaN(amount)) {
-            await reply('❌ Jumlah harus berupa angka (Contoh: 50000):');
+            await reply('❌ Jumlah harus berupa angka (Contoh: 50000 atau 50.000).');
             continue;
           }
 
