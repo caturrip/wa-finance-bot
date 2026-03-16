@@ -265,9 +265,12 @@ async function connectToWhatsApp() {
               `✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} untuk "${state.source}" - ${state.desc || '-'}.`
             );
             userStates.delete(userId);
-          } catch (error) {
-            console.error(error);
-            await reply('❌ Terjadi kesalahan saat mencatat transaksi.');
+          } catch (error: any) {
+            console.error('Error when saving transaction:', error);
+            const message = error?.message
+              ? ` (${error.message})`
+              : ` (${String(error)})`;
+            await reply(`❌ Terjadi kesalahan saat mencatat transaksi.${message}`);
           }
         }
       }

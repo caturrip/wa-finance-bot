@@ -11,18 +11,23 @@ export async function addTransaction(data: {
   amount: number;
   description: string;
 }) {
-  const transaction = await prisma.transaction.create({
-    data,
-  });
-  
-  // Fitur Sync ke Google Sheets secara otomatis setiap kali ada transaksi baru
   try {
-    await exportToSheet([transaction]);
-  } catch (error) {
-    console.error('Failed to auto-sync to Google Sheet:', error);
-  }
+    const transaction = await prisma.transaction.create({
+      data,
+    });
 
-  return transaction;
+    // Fitur Sync ke Google Sheets secara otomatis setiap kali ada transaksi baru
+    try {
+      await exportToSheet([transaction]);
+    } catch (error) {
+      console.error('Failed to auto-sync to Google Sheet:', error);
+    }
+
+    return transaction;
+  } catch (error: any) {
+    console.error('Prisma failed to create transaction:', error);
+    throw error;
+  }
 }
 
 export async function getSummary(userId: string, type: 'daily' | 'monthly') {

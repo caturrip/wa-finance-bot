@@ -110,9 +110,12 @@ bot.on('text', async (ctx, next) => {
       });
       ctx.reply(`✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount} untuk "${state.source}" - ${state.desc || '-'}.`);
       userStates.delete(userId);
-    } catch (error) {
-      console.error(error);
-      ctx.reply('❌ Terjadi kesalahan saat mencatat transaksi.');
+    } catch (error: any) {
+      console.error('Error when saving transaction:', error);
+      const message = error?.message
+        ? ` (${error.message})`
+        : ` (${String(error)})`;
+      ctx.reply(`❌ Terjadi kesalahan saat mencatat transaksi.${message}`);
     }
   } else {
     return next();
