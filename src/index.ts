@@ -5,6 +5,11 @@ import { startWhatsAppBot, latestQr } from './whatsapp';
 
 console.log('Starting Finance Bots...');
 
+// Log which database URL is being used (masked for safety)
+const dbUrl = process.env.DATABASE_URL || '<not set>';
+const safeDbUrl = dbUrl.replace(/:\/\/[^@]+@/, '://****:****@');
+console.log(`Using DATABASE_URL: ${safeDbUrl}`);
+
 startTelegramBot();
 startWhatsAppBot();
 
