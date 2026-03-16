@@ -12,6 +12,8 @@ import { exportToSheet } from './sheets';
 
 const logger = pino({ level: 'silent' }); // silent agar terminal tidak ramai
 
+export let latestQr: string | null = null;
+
 const userStates = new Map<string, {
   step: string,
   type?: string,
@@ -39,6 +41,7 @@ async function connectToWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      latestQr = qr;
       console.log('Scan QR Code ini untuk menghubungkan WhatsApp:');
       QRCode.generate(qr, { small: true });
     }
