@@ -107,19 +107,29 @@ async function connectToWhatsApp() {
       if (command === '!add') {
         userStates.set(userId, { step: 'AWAITING_TYPE' });
         
-        const buttons = [
-          { buttonId: '1', buttonText: { displayText: 'Pemasukan (Income)' }, type: 1 },
-          { buttonId: '2', buttonText: { displayText: 'Pengeluaran (Expense)' }, type: 1 }
-        ];
-
-        const buttonMessage = {
-          text: "Pilih tipe transaksi:",
-          footer: "Catur Finance Bot",
-          buttons: buttons,
-          headerType: 1
-        };
-
-        await sock.sendMessage(from, buttonMessage);
+        await sock.sendMessage(from, {
+          viewOnceMessage: {
+            message: {
+              interactiveMessage: {
+                header: { title: "*Tambah Transaksi*", hasMediaAttachment: false },
+                body: { text: "Silakan pilih tipe transaksi di bawah ini:" },
+                footer: { text: "Catur Finance Bot" },
+                nativeFlowMessage: {
+                  buttons: [
+                    {
+                      name: "quick_reply",
+                      buttonParamsJson: JSON.stringify({ display_text: "💰 Pemasukan (Income)", id: "1" })
+                    },
+                    {
+                      name: "quick_reply",
+                      buttonParamsJson: JSON.stringify({ display_text: "💸 Pengeluaran (Expense)", id: "2" })
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        } as any);
         continue;
       }
 
@@ -156,27 +166,38 @@ async function connectToWhatsApp() {
       }
 
       if (command === '!help' || command === '!menu') {
-        const sections = [
-          {
-            title: "Main Menu",
-            rows: [
-              { title: "➕ Tambah Transaksi", description: "Catat pemasukan atau pengeluaran baru", rowId: "!add" },
-              { title: "📊 Rekap Harian", description: "Lihat ringkasan transaksi hari ini", rowId: "!summary daily" },
-              { title: "📅 Rekap Bulanan", description: "Lihat ringkasan transaksi bulan ini", rowId: "!summary monthly" },
-              { title: "📤 Export Sheets", description: "Export data transaksi ke Google Sheets", rowId: "!export" },
-            ]
+        await sock.sendMessage(from, {
+          viewOnceMessage: {
+            message: {
+              interactiveMessage: {
+                header: { title: "*Catur Finance Bot*", hasMediaAttachment: false },
+                body: { text: "Halo! Pilih menu di bawah ini untuk mengelola keuanganmu:\n\nMode: *Interactive Menu*" },
+                footer: { text: "© Catur Finance Bot" },
+                nativeFlowMessage: {
+                  buttons: [
+                    {
+                      name: "single_select",
+                      buttonParamsJson: JSON.stringify({
+                        title: "Buka Menu Utama",
+                        sections: [
+                          {
+                            title: "Transaksi & Laporan",
+                            rows: [
+                              { title: "➕ Tambah Transaksi", description: "Catat pemasukan/pengeluaran baru", id: "!add" },
+                              { title: "📊 Rekap Harian", description: "Lihat ringkasan transaksi hari ini", id: "!summary daily" },
+                              { title: "📅 Rekap Bulanan", description: "Lihat ringkasan transaksi bulan ini", id: "!summary monthly" },
+                              { title: "📤 Export Sheets", description: "Export data ke Google Sheets", id: "!export" },
+                            ]
+                          }
+                        ]
+                      })
+                    }
+                  ]
+                }
+              }
+            }
           }
-        ];
-
-        const listMessage = {
-          text: "Catur Finance Bot 💰\n\nSilakan pilih menu di bawah ini untuk memulai:",
-          footer: "© Catur Finance Bot",
-          title: "Menu Utama",
-          buttonText: "Buka Menu",
-          sections
-        };
-
-        await sock.sendMessage(from, listMessage);
+        } as any);
         continue;
       }
 
@@ -190,17 +211,27 @@ async function connectToWhatsApp() {
             const incomeSources = ['Gaji Catur', 'Gaji Vermita', 'Panvers Store', 'THR Catur', 'THR Vermita', 'Lainnya'];
             const rows = incomeSources.map((s, i) => ({
               title: s,
-              rowId: (i + 1).toString()
+              id: (i + 1).toString()
             }));
 
-            const listMessage = {
-              text: "Pilih sumber pemasukan:",
-              footer: "Catur Finance Bot",
-              buttonText: "Lihat Sumber",
-              sections: [{ title: "Sumber Pemasukan", rows }]
-            };
-
-            await sock.sendMessage(from, listMessage);
+            await sock.sendMessage(from, {
+              viewOnceMessage: {
+                message: {
+                  interactiveMessage: {
+                    body: { text: "Pilih sumber pemasukan:" },
+                    nativeFlowMessage: {
+                      buttons: [{
+                        name: "single_select",
+                        buttonParamsJson: JSON.stringify({
+                          title: "Pilih Sumber",
+                          sections: [{ title: "Sumber Pemasukan", rows }]
+                        })
+                      }]
+                    }
+                  }
+                }
+              }
+            } as any);
           } else if (text === '2') {
             state.step = 'AWAITING_SOURCE';
             state.type = 'expense';
@@ -208,19 +239,29 @@ async function connectToWhatsApp() {
             const expenseSources = ['Makanan & Minuman', 'Entertaint', 'Sedekah', 'Listrik', 'Laundry', 'Kontrakan', 'Cicilan', 'Orang Tua', 'Transportasi', 'Uang Harian'];
             const rows = expenseSources.map((s, i) => ({
               title: s,
-              rowId: (i + 1).toString()
+              id: (i + 1).toString()
             }));
 
-            const listMessage = {
-              text: "Pilih jenis pengeluaran:",
-              footer: "Catur Finance Bot",
-              buttonText: "Lihat Jenis",
-              sections: [{ title: "Jenis Pengeluaran", rows }]
-            };
-
-            await sock.sendMessage(from, listMessage);
+            await sock.sendMessage(from, {
+              viewOnceMessage: {
+                message: {
+                  interactiveMessage: {
+                    body: { text: "Pilih jenis pengeluaran:" },
+                    nativeFlowMessage: {
+                      buttons: [{
+                        name: "single_select",
+                        buttonParamsJson: JSON.stringify({
+                          title: "Pilih Jenis",
+                          sections: [{ title: "Jenis Pengeluaran", rows }]
+                        })
+                      }]
+                    }
+                  }
+                }
+              }
+            } as any);
           } else {
-            await reply('❌ Pilihan tidak valid. Silakan pilih dari tombol yang tersedia.');
+            await reply('❌ Pilihan tidak valid. Silakan pilih dari menu yang muncul.');
           }
 
         } else if (state.step === 'AWAITING_SOURCE') {
@@ -236,17 +277,27 @@ async function connectToWhatsApp() {
               const paymentMethods = ['BCA', 'BRI', 'MANDIRI', 'CASH', 'SEABANK', 'OVO', 'DANA', 'BLU', 'GOPAY', 'JAGO'];
               const rows = paymentMethods.map((p, i) => ({
                 title: p,
-                rowId: (i + 1).toString()
+                id: (i + 1).toString()
               }));
 
-              const listMessage = {
-                text: `Pilih Metode Pembayaran untuk *${sources[index]}*:`,
-                footer: "Catur Finance Bot",
-                buttonText: "Pilih Metode",
-                sections: [{ title: "Metode Pembayaran", rows }]
-              };
-
-              await sock.sendMessage(from, listMessage);
+              await sock.sendMessage(from, {
+                viewOnceMessage: {
+                  message: {
+                    interactiveMessage: {
+                      body: { text: `Pilih Metode Pembayaran untuk *${sources[index]}*:` },
+                      nativeFlowMessage: {
+                        buttons: [{
+                          name: "single_select",
+                          buttonParamsJson: JSON.stringify({
+                            title: "Pilih Metode",
+                            sections: [{ title: "Metode Pembayaran", rows }]
+                          })
+                        }]
+                      }
+                    }
+                  }
+                }
+              } as any);
             } else {
               state.step = 'AWAITING_DESC';
               await reply(`Masukkan deskripsi untuk *${sources[index]}*\n(Contoh: Gaji Maret, atau ketik - untuk skip)`);
