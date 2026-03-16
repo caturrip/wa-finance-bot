@@ -160,6 +160,9 @@ bot.command('export', async (ctx) => {
     console.error('Export error:', error);
     const message = error?.message ? ` (${error.message})` : '';
     ctx.reply(`❌ Gagal mengekspor data.${message}`);
+  }
+});
+
 export const startTelegramBot = () => {
   if (!process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN === 'your_telegram_bot_token') {
     console.warn('TELEGRAM_BOT_TOKEN is not correctly set. Telegram bot will not start.');
