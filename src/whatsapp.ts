@@ -10,7 +10,7 @@ import * as QRCode from 'qrcode-terminal';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
 
-const logger = pino({ level: 'silent' }); // silent agar terminal tidak ramai
+const logger = pino({ level: 'info' }); // Diubah ke info untuk melihat log penting
 
 export let latestQr: string | null = null;
 
@@ -78,15 +78,38 @@ async function connectToWhatsApp() {
       // Abaikan pesan dari grup
       if (from.endsWith('@g.us')) continue;
 
-      const text = (
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.buttonsResponseMessage?.selectedButtonId ||
-        msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
-        msg.message.templateButtonReplyMessage?.selectedId ||
-        (msg.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson ? JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson).id : '') ||
-        ''
-      ).trim();
+      let text = '';
+      try {
+        const m = msg.message;
+        text = 
+          m.conversation || 
+          m.extendedTextMessage?.text || 
+          m.buttonsResponseMessage?.selectedButtonId || 
+          m.listResponseMessage?.singleSelectReply?.selectedRowId || 
+          m.templateButtonReplyMessage?.selectedId || 
+          '';
+
+        // Cek Interactive Response (Format Menu Baru)
+        if (m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+          const params = JSON.parse(m.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+          if (params.id) text = params.id;
+        }
+
+        // Cek ViewOnce (Beberapa tombol dibungkus ini)
+        if (!text && m.viewOnceMessage?.message) {
+          const v = m.viewOnceMessage.message;
+          text = v.conversation || v.extendedTextMessage?.text || '';
+          if (v.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+            const params = JSON.parse(v.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+            if (params.id) text = params.id;
+          }
+        }
+      } catch (e) {
+        console.error('Error extracting message text:', e);
+      }
+
+      text = text.trim();
+      console.log(`[MSG] dari ${from}: "${text}"`);
 
       if (!text) continue;
 
