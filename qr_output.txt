@@ -1,0 +1,7 @@
+
+> catur-finance-bot@1.0.0 start
+> ts-node src/index.ts
+
+Starting Finance Bots...
+Initializing WhatsApp bot...
+Both bots have been invoked to start.

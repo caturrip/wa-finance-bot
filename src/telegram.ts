@@ -1,43 +1,121 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
+const userStates = new Map<string, { step: string, type?: string, source?: string, payment?: string, desc?: string }>();
 
 bot.start((ctx) => {
-  ctx.reply('Selamat datang di Catur Finance Bot! Gunakan perintah berikut:\n\n/add <income/expense> <jumlah> <deskripsi>\n/summary <daily/monthly>\n/export\n\nContoh:\n/add expense 50000 makan siang');
+  ctx.reply('Selamat datang di Catur Finance Bot! Gunakan perintah berikut:\n\n/add - Tambah transaksi baru\n/summary <daily/monthly> - Rekap transaksi\n/export - Export ke Google Sheets');
 });
 
-bot.command('add', async (ctx) => {
-  const message = ctx.message.text.split(' ');
-  if (message.length < 4) {
-    return ctx.reply('Format salah. Gunakan:\n/add <income/expense> <jumlah> <deskripsi>');
+bot.command('add', (ctx) => {
+  userStates.set(ctx.from.id.toString(), { step: 'AWAITING_TYPE' });
+  ctx.reply('Pilih tipe transaksi:', Markup.inlineKeyboard([
+    [
+      Markup.button.callback('💵 Income', 'type_income'),
+      Markup.button.callback('💸 Expense', 'type_expense')
+    ]
+  ]));
+});
+
+bot.action('type_income', (ctx) => {
+  ctx.answerCbQuery();
+  userStates.set(ctx.from.id.toString(), { step: 'AWAITING_SOURCE', type: 'income' });
+  ctx.editMessageText('Pilih sumber pemasukan:', Markup.inlineKeyboard([
+    [Markup.button.callback('Gaji Catur', 'src_Gaji Catur'), Markup.button.callback('Gaji Vermita', 'src_Gaji Vermita')],
+    [Markup.button.callback('Panvers Store', 'src_Panvers Store')],
+    [Markup.button.callback('THR Catur', 'src_THR Catur'), Markup.button.callback('THR Vermita', 'src_THR Vermita')],
+    [Markup.button.callback('Lainnya', 'src_Lainnya')]
+  ]));
+});
+
+bot.action('type_expense', (ctx) => {
+  ctx.answerCbQuery();
+  userStates.set(ctx.from.id.toString(), { step: 'AWAITING_SOURCE', type: 'expense' });
+  ctx.editMessageText('Pilih jenis pengeluaran:', Markup.inlineKeyboard([
+    [Markup.button.callback('Makanan & Minuman', 'src_Makanan & Minuman'), Markup.button.callback('Entertaint', 'src_Entertaint')],
+    [Markup.button.callback('Sedekah', 'src_Sedekah'), Markup.button.callback('Listrik', 'src_Listrik')],
+    [Markup.button.callback('Laundry', 'src_Laundry'), Markup.button.callback('Kontrakan', 'src_Kontrakan')],
+    [Markup.button.callback('Cicilan', 'src_Cicilan'), Markup.button.callback('Orang Tua', 'src_Orang Tua')],
+    [Markup.button.callback('Transportasi', 'src_Transportasi'), Markup.button.callback('Uang Harian', 'src_Uang Harian')]
+  ]));
+});
+
+bot.action(/^src_(.+)$/, (ctx) => {
+  ctx.answerCbQuery();
+  const source = ctx.match[1];
+  const userId = ctx.from.id.toString();
+  const state = userStates.get(userId);
+  
+  if (state && state.step === 'AWAITING_SOURCE') {
+    state.source = source;
+    
+    if (state.type === 'expense') {
+      state.step = 'AWAITING_PAYMETH';
+      ctx.editMessageText('Pilih Metode Pembayaran:', Markup.inlineKeyboard([
+        [Markup.button.callback('BCA', 'pay_BCA'), Markup.button.callback('BRI', 'pay_BRI')],
+        [Markup.button.callback('MANDIRI', 'pay_MANDIRI'), Markup.button.callback('CASH', 'pay_CASH')],
+        [Markup.button.callback('SEABANK', 'pay_SEABANK'), Markup.button.callback('OVO', 'pay_OVO')],
+        [Markup.button.callback('DANA', 'pay_DANA'), Markup.button.callback('BLU', 'pay_BLU')],
+        [Markup.button.callback('GOPAY', 'pay_GOPAY'), Markup.button.callback('JAGO', 'pay_JAGO')]
+      ]));
+    } else {
+      state.step = 'AWAITING_DESC';
+      ctx.editMessageText(`Masukkan deskripsi untuk *${source}*\n(Contoh: Gaji Maret, atau ketik \`-\` untuk skip)`, { parse_mode: 'Markdown' });
+    }
   }
+});
 
-  const type = message[1].toLowerCase();
-  if (type !== 'income' && type !== 'expense') {
-    return ctx.reply('Tipe harus "income" atau "expense".');
+bot.action(/^pay_(.+)$/, (ctx) => {
+  ctx.answerCbQuery();
+  const payment = ctx.match[1];
+  const userId = ctx.from.id.toString();
+  const state = userStates.get(userId);
+  
+  if (state && state.step === 'AWAITING_PAYMETH') {
+    state.step = 'AWAITING_DESC';
+    state.payment = payment;
+    ctx.editMessageText(`Masukkan deskripsi untuk pengeluaran *${state.source}* via *${payment}*\n(Contoh: Makan Siang, atau ketik \`-\` untuk skip)`, { parse_mode: 'Markdown' });
   }
+});
 
-  const amount = parseFloat(message[2]);
-  if (isNaN(amount)) {
-    return ctx.reply('Jumlah harus berupa angka.');
-  }
+bot.on('text', async (ctx, next) => {
+  // If it's a command, let other handlers process it
+  if (ctx.message.text.startsWith('/')) return next();
 
-  const description = message.slice(3).join(' ');
+  const userId = ctx.from.id.toString();
+  const state = userStates.get(userId);
 
-  try {
-    await addTransaction({
-      userId: ctx.from.id.toString(),
-      platform: 'telegram',
-      type: type as 'income' | 'expense',
-      amount,
-      description,
-    });
-    ctx.reply(`Berhasil mencatat ${type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount} untuk "${description}".`);
-  } catch (error) {
-    console.error(error);
-    ctx.reply('Terjadi kesalahan saat mencatat transaksi.');
+  if (state && state.step === 'AWAITING_DESC') {
+    state.desc = ctx.message.text === '-' ? '' : ctx.message.text;
+    state.step = 'AWAITING_AMOUNT';
+    const label = state.payment ? `*${state.source}* via *${state.payment}*` : `*${state.source}*`;
+    return ctx.reply(`Masukkan jumlah uang untuk ${label}\n(Contoh: 50000)`, { parse_mode: 'Markdown' });
+  } else if (state && state.step === 'AWAITING_AMOUNT') {
+    const amount = parseFloat(ctx.message.text);
+    if (isNaN(amount)) {
+      return ctx.reply('Jumlah harus berupa angka. Silakan masukkan nominal yang benar (Contoh: 50000):');
+    }
+    
+    const finalDescription = state.payment ? `${state.source} (${state.payment})|${state.desc || ''}` : `${state.source}|${state.desc || ''}`;
+    
+    try {
+      await addTransaction({
+        userId,
+        platform: 'telegram',
+        type: state.type as 'income' | 'expense',
+        amount,
+        description: finalDescription,
+      });
+      ctx.reply(`✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount} untuk "${state.source}" - ${state.desc || '-'}.`);
+      userStates.delete(userId);
+    } catch (error) {
+      console.error(error);
+      ctx.reply('❌ Terjadi kesalahan saat mencatat transaksi.');
+    }
+  } else {
+    return next();
   }
 });
 

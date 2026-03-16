@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 export const prisma = new PrismaClient();
 
+import { exportToSheet } from './sheets';
+
 export async function addTransaction(data: {
   userId: string;
   platform: 'whatsapp' | 'telegram';
@@ -9,9 +11,18 @@ export async function addTransaction(data: {
   amount: number;
   description: string;
 }) {
-  return await prisma.transaction.create({
+  const transaction = await prisma.transaction.create({
     data,
   });
+  
+  // Fitur Sync ke Google Sheets secara otomatis setiap kali ada transaksi baru
+  try {
+    await exportToSheet([transaction]);
+  } catch (error) {
+    console.error('Failed to auto-sync to Google Sheet:', error);
+  }
+
+  return transaction;
 }
 
 export async function getSummary(userId: string, type: 'daily' | 'monthly') {
