@@ -20,16 +20,17 @@ export async function getAuthToken() {
 export async function exportToSheet(transactions: any[]) {
   const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
   if (!spreadSheetId) {
-    console.warn('Google Spreadsheet ID is not set.');
-    return false;
+    throw new Error('GOOGLE_SPREADSHEET_ID is not set');
   }
 
   const auth = await getAuthToken();
-  if (!auth) return false;
+  if (!auth) {
+    throw new Error('Google Sheets auth token could not be created (check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY)');
+  }
 
   const sheets = google.sheets({ version: 'v4', auth });
 
-  if (transactions.length === 0) return true;
+  if (transactions.length === 0) return;
 
   // Dictionary for Indonesian month names according to the Google Sheet tabs
   const monthNames = [
@@ -158,9 +159,9 @@ export async function exportToSheet(transactions: any[]) {
     }
 
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error exporting to specific sheet:', error);
-    return false;
+    throw error;
   }
 }
 

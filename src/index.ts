@@ -1,7 +1,9 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import http from 'http';
 import { startTelegramBot } from './telegram';
 import { startWhatsAppBot, latestQr } from './whatsapp';
+
+dotenv.config({ override: true });
 
 console.log('Starting Finance Bots...');
 

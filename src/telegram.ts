@@ -154,19 +154,12 @@ bot.command('export', async (ctx) => {
   try {
     ctx.reply('Mengekspor data ke Google Sheets...');
     const summary = await getSummary(ctx.from.id.toString(), 'monthly');
-    const success = await exportToSheet(summary.transactions);
-    
-    if (success) {
-      ctx.reply('Berhasil mengekspor data bulan ini ke Google Sheets.');
-    } else {
-      ctx.reply('Gagal mengekspor data. Pastikan konfigurasi kredensial Google Sheets di server (environment variables) sudah diatur dengan benar.');
-    }
-  } catch (error) {
-    console.error(error);
-    ctx.reply('Terjadi kesalahan saat mengekspor data.');
-  }
-});
-
+    await exportToSheet(summary.transactions);
+    ctx.reply('✅ Berhasil mengekspor data bulan ini ke Google Sheets.');
+  } catch (error: any) {
+    console.error('Export error:', error);
+    const message = error?.message ? ` (${error.message})` : '';
+    ctx.reply(`❌ Gagal mengekspor data.${message}`);
 export const startTelegramBot = () => {
   if (!process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN === 'your_telegram_bot_token') {
     console.warn('TELEGRAM_BOT_TOKEN is not correctly set. Telegram bot will not start.');

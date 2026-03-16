@@ -137,11 +137,12 @@ async function connectToWhatsApp() {
         try {
           await reply('Mengekspor data ke Google Sheets...');
           const summary = await getSummary(userId, 'monthly');
-          const success = await exportToSheet(summary.transactions);
-          await reply(success ? 'Berhasil mengekspor data bulan ini.' : 'Gagal mengekspor data.');
-        } catch (err) {
-          await reply('Terjadi kesalahan saat mengekspor data.');
-        }
+      await exportToSheet(summary.transactions);
+      await reply('✅ Berhasil mengekspor data bulan ini.');
+    } catch (err: any) {
+      console.error('Export error:', err);
+      const message = err?.message ? ` (${err.message})` : '';
+      await reply(`❌ Gagal mengekspor data.${message}`);
         continue;
       }
 
