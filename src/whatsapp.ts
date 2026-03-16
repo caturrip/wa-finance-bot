@@ -42,8 +42,16 @@ async function connectToWhatsApp() {
 
     if (qr) {
       latestQr = qr;
-      console.log('Scan QR Code ini untuk menghubungkan WhatsApp:');
+      console.log('\n==================================================');
+      console.log('SCAN QR CODE DI BAWAH INI:');
+      console.log('==================================================\n');
+      
       QRCode.generate(qr, { small: true });
+      
+      console.log('\n==================================================');
+      console.log('Atau buka link ini jika QR di atas terpotong/rusak:');
+      console.log(`http://localhost:${process.env.PORT || 3000}`);
+      console.log('==================================================\n');
     }
 
     if (connection === 'close') {
@@ -73,6 +81,10 @@ async function connectToWhatsApp() {
       const text = (
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
+        msg.message.buttonsResponseMessage?.selectedButtonId ||
+        msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        msg.message.templateButtonReplyMessage?.selectedId ||
+        (msg.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson ? JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson).id : '') ||
         ''
       ).trim();
 
@@ -94,9 +106,20 @@ async function connectToWhatsApp() {
 
       if (command === '!add') {
         userStates.set(userId, { step: 'AWAITING_TYPE' });
-        await reply(
-          `Pilih tipe transaksi (Balas angka):\n\n1️⃣ Pemasukan (Income)\n2️⃣ Pengeluaran (Expense)`
-        );
+        
+        const buttons = [
+          { buttonId: '1', buttonText: { displayText: 'Pemasukan (Income)' }, type: 1 },
+          { buttonId: '2', buttonText: { displayText: 'Pengeluaran (Expense)' }, type: 1 }
+        ];
+
+        const buttonMessage = {
+          text: "Pilih tipe transaksi:",
+          footer: "Catur Finance Bot",
+          buttons: buttons,
+          headerType: 1
+        };
+
+        await sock.sendMessage(from, buttonMessage);
         continue;
       }
 
@@ -132,14 +155,28 @@ async function connectToWhatsApp() {
         continue;
       }
 
-      if (command === '!help') {
-        await reply(
-          'Catur Finance Bot 💰\n\n' +
-          '!add → Tambah transaksi baru\n' +
-          '!summary daily → Rekap hari ini\n' +
-          '!summary monthly → Rekap bulan ini\n' +
-          '!export → Export ke Google Sheets'
-        );
+      if (command === '!help' || command === '!menu') {
+        const sections = [
+          {
+            title: "Main Menu",
+            rows: [
+              { title: "➕ Tambah Transaksi", description: "Catat pemasukan atau pengeluaran baru", rowId: "!add" },
+              { title: "📊 Rekap Harian", description: "Lihat ringkasan transaksi hari ini", rowId: "!summary daily" },
+              { title: "📅 Rekap Bulanan", description: "Lihat ringkasan transaksi bulan ini", rowId: "!summary monthly" },
+              { title: "📤 Export Sheets", description: "Export data transaksi ke Google Sheets", rowId: "!export" },
+            ]
+          }
+        ];
+
+        const listMessage = {
+          text: "Catur Finance Bot 💰\n\nSilakan pilih menu di bawah ini untuk memulai:",
+          footer: "© Catur Finance Bot",
+          title: "Menu Utama",
+          buttonText: "Buka Menu",
+          sections
+        };
+
+        await sock.sendMessage(from, listMessage);
         continue;
       }
 
@@ -149,17 +186,41 @@ async function connectToWhatsApp() {
           if (text === '1') {
             state.step = 'AWAITING_SOURCE';
             state.type = 'income';
-            await reply(
-              `Pilih sumber pemasukan (Balas angka):\n\n1️⃣ Gaji Catur\n2️⃣ Gaji Vermita\n3️⃣ Panvers Store\n4️⃣ THR Catur\n5️⃣ THR Vermita\n6️⃣ Lainnya`
-            );
+            
+            const incomeSources = ['Gaji Catur', 'Gaji Vermita', 'Panvers Store', 'THR Catur', 'THR Vermita', 'Lainnya'];
+            const rows = incomeSources.map((s, i) => ({
+              title: s,
+              rowId: (i + 1).toString()
+            }));
+
+            const listMessage = {
+              text: "Pilih sumber pemasukan:",
+              footer: "Catur Finance Bot",
+              buttonText: "Lihat Sumber",
+              sections: [{ title: "Sumber Pemasukan", rows }]
+            };
+
+            await sock.sendMessage(from, listMessage);
           } else if (text === '2') {
             state.step = 'AWAITING_SOURCE';
             state.type = 'expense';
-            await reply(
-              `Pilih jenis pengeluaran (Balas angka):\n\n1️⃣ Makanan & Minuman\n2️⃣ Entertaint\n3️⃣ Sedekah\n4️⃣ Listrik\n5️⃣ Laundry\n6️⃣ Kontrakan\n7️⃣ Cicilan\n8️⃣ Orang Tua\n9️⃣ Transportasi\n🔟 Uang Harian`
-            );
+            
+            const expenseSources = ['Makanan & Minuman', 'Entertaint', 'Sedekah', 'Listrik', 'Laundry', 'Kontrakan', 'Cicilan', 'Orang Tua', 'Transportasi', 'Uang Harian'];
+            const rows = expenseSources.map((s, i) => ({
+              title: s,
+              rowId: (i + 1).toString()
+            }));
+
+            const listMessage = {
+              text: "Pilih jenis pengeluaran:",
+              footer: "Catur Finance Bot",
+              buttonText: "Lihat Jenis",
+              sections: [{ title: "Jenis Pengeluaran", rows }]
+            };
+
+            await sock.sendMessage(from, listMessage);
           } else {
-            await reply('❌ Pilihan tidak valid. Balas dengan angka 1 atau 2.');
+            await reply('❌ Pilihan tidak valid. Silakan pilih dari tombol yang tersedia.');
           }
 
         } else if (state.step === 'AWAITING_SOURCE') {
@@ -172,9 +233,20 @@ async function connectToWhatsApp() {
             state.source = sources[index];
             if (state.type === 'expense') {
               state.step = 'AWAITING_PAYMETH';
-              await reply(
-                `Pilih Metode Pembayaran (Balas angka):\n\n1️⃣ BCA\n2️⃣ BRI\n3️⃣ MANDIRI\n4️⃣ CASH\n5️⃣ SEABANK\n6️⃣ OVO\n7️⃣ DANA\n8️⃣ BLU\n9️⃣ GOPAY\n🔟 JAGO`
-              );
+              const paymentMethods = ['BCA', 'BRI', 'MANDIRI', 'CASH', 'SEABANK', 'OVO', 'DANA', 'BLU', 'GOPAY', 'JAGO'];
+              const rows = paymentMethods.map((p, i) => ({
+                title: p,
+                rowId: (i + 1).toString()
+              }));
+
+              const listMessage = {
+                text: `Pilih Metode Pembayaran untuk *${sources[index]}*:`,
+                footer: "Catur Finance Bot",
+                buttonText: "Pilih Metode",
+                sections: [{ title: "Metode Pembayaran", rows }]
+              };
+
+              await sock.sendMessage(from, listMessage);
             } else {
               state.step = 'AWAITING_DESC';
               await reply(`Masukkan deskripsi untuk *${sources[index]}*\n(Contoh: Gaji Maret, atau ketik - untuk skip)`);
