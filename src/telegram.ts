@@ -166,12 +166,12 @@ bot.on('text', async (ctx, next) => {
   } else if (state && state.step === 'AWAITING_AMOUNT') {
     const amount = parseAmount(ctx.message.text);
     if (isNaN(amount)) {
-      return ctx.reply('Jumlah harus berupa angka. Contoh penginputan:
+      return ctx.reply(`Jumlah harus berupa angka. Contoh penginputan:
 1. Bakso 15000
 2. Ayam Geprek 20rb
 3. /add expense 50000 Makan Siang
 4. /add income 100000 Gaji
-Silakan masukkan nominal yang benar (misal: 50000 atau 20rb):');
+Silakan masukkan nominal yang benar (misal: 50000 atau 20rb):`);
     }
     
     const finalDescription = state.payment ? `${state.source} (${state.payment})|${state.desc || ''}` : `${state.source}|${state.desc || ''}`;
