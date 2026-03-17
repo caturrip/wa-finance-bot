@@ -69,6 +69,12 @@ export function parseAmount(raw: string): number {
 }
 
 const expenseCategoryKeywords: Array<{ category: string; keywords: RegExp[] }> = [
+    {
+      category: 'Lainnya',
+      keywords: [
+        /\btransfer\b/, /\btukar\b/, /\buang\b/, /\bmutasi\b/, /\bkue\b/, /\bghista\b/, /\banna\b/
+      ],
+    },
   {
     category: 'Makanan & Minuman',
     keywords: [
