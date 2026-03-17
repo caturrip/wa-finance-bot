@@ -155,8 +155,8 @@ export function inferTransactionFromText(text: string): InferredTransaction | nu
     tanggal = new Date(`${matchSlash[3]}-${matchSlash[2]}-${matchSlash[1]}`);
     tanggalStr = matchSlash[0];
   }
-  // Format: "di tanggal 11 Maret" atau "11 Maret" atau "11 March"
-  const matchNatural = normalized.match(/(?:di\s*tanggal\s*)?(\d{1,2})\s*(maret|march|april|mei|may|juni|june|juli|july|agustus|august|september|oktober|october|november|desember|december)/i);
+  // Format: "di tanggal 11 Maret", "tanggal 11 Maret", "11 Maret", "11 March"
+  const matchNatural = normalized.match(/(?:di\s*)?(?:tanggal\s*)?(\d{1,2})\s*(maret|march|april|mei|may|juni|june|juli|july|agustus|august|september|oktober|october|november|desember|december)/i);
   if (matchNatural) {
     const day = parseInt(matchNatural[1], 10);
     const monthStr = matchNatural[2].toLowerCase();
