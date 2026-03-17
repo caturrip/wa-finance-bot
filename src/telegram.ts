@@ -1,7 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
-import { inferTransactionFromText, parseAmount } from './utils';
+import { inferTransactionFromText, parseAmount, getRandomQuote } from './utils';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
 const userStates = new Map<string, { step: string, type?: string, source?: string, payment?: string, desc?: string }>();
@@ -148,7 +148,7 @@ bot.on('text', async (ctx, next) => {
           description: `${inferred.source}|${inferred.description}`,
         });
         return ctx.reply(
-          `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).`
+          `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).\n\n_${getRandomQuote()}_`
         );
       } catch (error: any) {
         console.error('Error when saving transaction (auto):', error);
@@ -166,7 +166,12 @@ bot.on('text', async (ctx, next) => {
   } else if (state && state.step === 'AWAITING_AMOUNT') {
     const amount = parseAmount(ctx.message.text);
     if (isNaN(amount)) {
-      return ctx.reply('Jumlah harus berupa angka. Silakan masukkan nominal yang benar (Contoh: 50000):');
+      return ctx.reply('Jumlah harus berupa angka. Contoh penginputan:
+1. Bakso 15000
+2. Ayam Geprek 20rb
+3. /add expense 50000 Makan Siang
+4. /add income 100000 Gaji
+Silakan masukkan nominal yang benar (misal: 50000 atau 20rb):');
     }
     
     const finalDescription = state.payment ? `${state.source} (${state.payment})|${state.desc || ''}` : `${state.source}|${state.desc || ''}`;
@@ -179,7 +184,7 @@ bot.on('text', async (ctx, next) => {
         amount,
         description: finalDescription,
       });
-      ctx.reply(`✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount} untuk "${state.source}" - ${state.desc || '-'}.`);
+      ctx.reply(`✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${state.source}).\n\n_${getRandomQuote()}_`);
       userStates.delete(userId);
     } catch (error: any) {
       console.error('Error when saving transaction:', error);

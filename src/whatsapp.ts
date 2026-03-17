@@ -9,7 +9,7 @@ import pino from 'pino';
 import * as QRCode from 'qrcode-terminal';
 import { addTransaction, getSummary } from './db';
 import { exportToSheet } from './sheets';
-import { inferTransactionFromText, parseAmount } from './utils';
+import { inferTransactionFromText, parseAmount, getRandomQuote } from './utils';
 
 const logger = pino({ level: 'info' }); // Diubah ke info untuk melihat log penting
 
@@ -219,7 +219,7 @@ async function connectToWhatsApp() {
               description: `${inferred.source}|${inferred.description}`,
             });
             await reply(
-              `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).`
+              `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).\n\n_${getRandomQuote()}_`
             );
             continue;
           } catch (error: any) {
@@ -294,7 +294,7 @@ async function connectToWhatsApp() {
         } else if (state.step === 'AWAITING_AMOUNT') {
           const amount = parseAmount(text);
           if (isNaN(amount)) {
-            await reply('❌ Jumlah harus berupa angka (Contoh: 50000 atau 50.000).');
+            await reply('❌ Jumlah harus berupa angka. Contoh penginputan:\n1. Bakso 15000\n2. Ayam Geprek 20rb\n3. !add expense 50000 Makan Siang\n4. !add income 100000 Gaji\nSilakan masukkan nominal yang benar (misal: 50000 atau 20rb).');
             continue;
           }
 
@@ -311,7 +311,7 @@ async function connectToWhatsApp() {
               description: finalDescription,
             });
             await reply(
-              `✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} untuk "${state.source}" - ${state.desc || '-'}.`
+              `✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${state.source}).\n\n_${getRandomQuote()}_`
             );
             userStates.delete(userId);
           } catch (error: any) {

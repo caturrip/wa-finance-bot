@@ -1,3 +1,19 @@
+// Quotes harian random
+export function getRandomQuote(): string {
+  const quotes = [
+    '_Setiap pengeluaran hari ini, semoga jadi kenangan indah bersama kamu._',
+    '_Menabung untuk masa depan, tapi bahagia bersamamu hari ini._',
+    '_Makan sederhana, asal berdua terasa istimewa._',
+    '_Bersama kamu, setiap hari jadi lebih bermakna._',
+    '_Cinta itu sederhana: cukup saling percaya dan saling jajan bareng._',
+    '_Uang bisa dicari, tapi waktu bersamamu tak ternilai harganya._',
+    '_Semoga rejeki kita selalu cukup untuk saling membahagiakan._',
+    '_Terima kasih sudah jadi partner hidup dan partner keuangan._',
+    '_Setiap transaksi hari ini, semoga membawa berkah untuk keluarga kecil kita._',
+    '_Bersamamu, belanja bulanan pun jadi quality time._'
+  ];
+  return quotes[Math.floor(Math.random() * quotes.length)];
+}
 // Utility functions used by both WhatsApp and Telegram bots.
 
 export type BotPlatform = 'whatsapp' | 'telegram';

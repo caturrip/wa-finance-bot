@@ -50,7 +50,7 @@ export async function exportToSheet(transactions: any[]) {
       let kategoriStr = t.description;
       let metodeBayar = '-';
       let deskripsiStr = '-';
-      
+
       // Split by pipe untuk mendapatkan deskripsi
       const pipeParts = t.description.split('|');
       const mainPart = pipeParts[0].trim();
@@ -64,10 +64,17 @@ export async function exportToSheet(transactions: any[]) {
         const parts = mainPart.split('(');
         kategoriStr = parts[0].trim();
         metodeBayar = parts[1].replace(')', '').trim();
+      } else {
+        // Tambahan: parsing otomatis "pakai <metode>" jika tidak ada tanda kurung
+        const pakaiMatch = mainPart.match(/pakai\s+([A-Za-z0-9]+)/i);
+        if (pakaiMatch) {
+          metodeBayar = pakaiMatch[1].toUpperCase();
+          kategoriStr = mainPart.replace(/pakai\s+[A-Za-z0-9]+/i, '').trim();
+        }
       }
 
-      // Format tanggal
-      const formattedDate = date.toLocaleDateString('id-ID'); // DD/MM/YYYY
+      // Format tanggal: "Monday, March 16, 2026"
+      const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
       if (t.type === 'expense') {
         if (!expenseByMonth[monthName]) expenseByMonth[monthName] = [];
