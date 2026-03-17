@@ -23,6 +23,7 @@ export type InferredTransaction = {
   amount: number;
   source: string;
   description: string;
+  timestamp?: Date;
 };
 
 /**
@@ -139,6 +140,48 @@ export function inferTransactionFromText(text: string): InferredTransaction | nu
   const normalized = text.trim();
   if (!normalized) return null;
 
+  // Cari tanggal natural language
+  let tanggal: Date | null = null;
+  let tanggalStr = '';
+  // Format: YYYY-MM-DD
+  const matchISO = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (matchISO) {
+    tanggal = new Date(`${matchISO[1]}-${matchISO[2]}-${matchISO[3]}`);
+    tanggalStr = matchISO[0];
+  }
+  // Format: DD/MM/YYYY
+  const matchSlash = normalized.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (matchSlash) {
+    tanggal = new Date(`${matchSlash[3]}-${matchSlash[2]}-${matchSlash[1]}`);
+    tanggalStr = matchSlash[0];
+  }
+  // Format: "di tanggal 11 Maret" atau "11 Maret" atau "11 March"
+  const matchNatural = normalized.match(/(?:di\s*tanggal\s*)?(\d{1,2})\s*(maret|march|april|mei|may|juni|june|juli|july|agustus|august|september|oktober|october|november|desember|december)/i);
+  if (matchNatural) {
+    const day = parseInt(matchNatural[1], 10);
+    const monthStr = matchNatural[2].toLowerCase();
+    const monthMap: { [key: string]: number } = {
+      'january': 0, 'januari': 0,
+      'february': 1, 'februari': 1,
+      'march': 2, 'maret': 2,
+      'april': 3,
+      'may': 4, 'mei': 4,
+      'june': 5, 'juni': 5,
+      'july': 6, 'juli': 6,
+      'august': 7, 'agustus': 7,
+      'september': 8,
+      'october': 9, 'oktober': 9,
+      'november': 10,
+      'december': 11, 'desember': 11
+    };
+    const month = monthMap[monthStr] ?? null;
+    if (month !== null) {
+      const year = new Date().getFullYear();
+      tanggal = new Date(year, month, day);
+      tanggalStr = matchNatural[0];
+    }
+  }
+
   // Cari nominal di teks
   const tokens = normalized.split(/\s+/);
   let amount: number | null = null;
@@ -161,14 +204,19 @@ export function inferTransactionFromText(text: string): InferredTransaction | nu
 
   const source = type === 'income' ? inferIncomeCategory(lower) : inferExpenseCategory(lower);
 
-  // Deskripsi: seluruh teks kecuali angka nominal
-  const descTokens = tokens.filter((_, idx) => idx !== amountIndex);
+  // Deskripsi: seluruh teks kecuali angka nominal dan tanggal
+  let descTokens = tokens.filter((_, idx) => idx !== amountIndex);
+  if (tanggalStr) {
+    descTokens = descTokens.filter(token => !token.toLowerCase().includes(tanggalStr.toLowerCase()));
+  }
   const desc = descTokens.join(' ');
 
+  // Kembalikan tanggal jika ditemukan
   return {
     type,
     amount,
     source,
     description: desc,
+    ...(tanggal ? { timestamp: tanggal } : {})
   };
 }

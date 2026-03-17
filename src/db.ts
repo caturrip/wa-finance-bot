@@ -10,10 +10,16 @@ export async function addTransaction(data: {
   type: 'income' | 'expense';
   amount: number;
   description: string;
+  timestamp?: Date;
 }) {
   try {
+    // Gunakan timestamp jika ada, jika tidak pakai Date.now()
+    const dbData = {
+      ...data,
+      timestamp: data.timestamp ? data.timestamp : new Date(),
+    };
     const transaction = await prisma.transaction.create({
-      data,
+      data: dbData,
     });
 
     // Fitur Sync ke Google Sheets secara otomatis setiap kali ada transaksi baru

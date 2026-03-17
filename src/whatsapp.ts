@@ -200,7 +200,12 @@ async function connectToWhatsApp() {
           '!add → Tambah transaksi baru (atau: !add income 50000 Gaji)\n' +
           '!summary daily → Rekap hari ini\n' +
           '!summary monthly → Rekap bulan ini\n' +
-          '!export → Export ke Google Sheets'
+          '!export → Export ke Google Sheets\n' +
+          '\nCara input transaksi backdated:' +
+          '\n- Tambahkan tanggal di akhir transaksi, misal:' +
+          '\n  Mie ayam 20rb pakai GOPAY 15/3/2026' +
+          '\n  Transfer ke Tante Anna 1,5jt pakai BCA 2026-03-15' +
+          '\n- Bot akan otomatis mencatat sesuai tanggal yang diinput, dan menambah row jika tanggal sudah terisi.'
         );
         continue;
       }
@@ -221,6 +226,7 @@ async function connectToWhatsApp() {
                 type: inferred.type,
                 amount: inferred.amount,
                 description: `${inferred.source}|${inferred.description}`,
+                ...(inferred.timestamp ? { timestamp: inferred.timestamp } : {}),
               });
               successCount++;
             } catch (error: any) {

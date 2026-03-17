@@ -150,6 +150,7 @@ bot.on('text', async (ctx, next) => {
             type: inferred.type,
             amount: inferred.amount,
             description: `${inferred.source}|${inferred.description}`,
+            ...(inferred.timestamp ? { timestamp: inferred.timestamp } : {}),
           });
           successCount++;
         } catch (error: any) {

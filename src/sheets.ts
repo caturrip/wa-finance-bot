@@ -107,31 +107,63 @@ export async function exportToSheet(transactions: any[]) {
     // === EXPENSE: Append ke kolom H:L pada baris kosong pertama ===
     for (const monthName of Object.keys(expenseByMonth)) {
       const values = expenseByMonth[monthName];
-
-      // Baca kolom H dari baris 14 ke bawah (baris 13 = header: STATUS/TANGGAL/dll, baris 14 = data pertama)
       const DATA_START_ROW = 14;
       const readRes = await sheets.spreadsheets.values.get({
         spreadsheetId: spreadSheetId,
         range: `${monthName}!H${DATA_START_ROW}:H1000`,
       });
-      
       const rows = readRes.data.values || [];
-      // Cari baris kosong pertama mulai dari DATA_START_ROW
-      let firstEmptyRow = DATA_START_ROW + rows.length; // default: setelah data terakhir
-      for (let i = 0; i < rows.length; i++) {
-        if (!rows[i] || !rows[i][0] || rows[i][0].trim() === '') {
-          firstEmptyRow = DATA_START_ROW + i; // 1-indexed
-          break;
-        }
-      }
 
-      // Tulis data ke kolom H:L mulai dari baris kosong pertama
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: spreadSheetId,
-        range: `${monthName}!H${firstEmptyRow}:L${firstEmptyRow + values.length - 1}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values },
-      });
+      for (const value of values) {
+        const tanggalBaru = value[0];
+        // Cari baris dengan tanggal yang sama
+        let rowIdx = -1;
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i] && rows[i][0] && rows[i][0].trim() === tanggalBaru.trim()) {
+            rowIdx = DATA_START_ROW + i;
+            break;
+          }
+        }
+        let targetRow = -1;
+        if (rowIdx !== -1) {
+          // Jika tanggal sudah ada, add row above
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: spreadSheetId,
+            requestBody: {
+              requests: [
+                {
+                  insertDimension: {
+                    range: {
+                      sheetId: undefined, // biarkan kosong agar pakai nama
+                      dimension: 'ROWS',
+                      startIndex: rowIdx - 1,
+                      endIndex: rowIdx - 1 + 1,
+                    },
+                    inheritFromBefore: false,
+                  },
+                },
+              ],
+            },
+          });
+          targetRow = rowIdx;
+        } else {
+          // Jika tanggal belum ada, cari baris kosong pertama
+          targetRow = DATA_START_ROW + rows.length;
+          for (let i = 0; i < rows.length; i++) {
+            if (!rows[i] || !rows[i][0] || rows[i][0].trim() === '') {
+              targetRow = DATA_START_ROW + i;
+              break;
+            }
+          }
+        }
+        // Tulis data ke kolom H:L pada baris targetRow
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: spreadSheetId,
+          range: `${monthName}!H${targetRow}:L${targetRow}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [value] },
+        });
+      }
     }
 
     // === INCOME: Cari baris berdasarkan KATEGORI di kolom B, lalu isi A (tanggal) dan E (ACTUAL) ===
