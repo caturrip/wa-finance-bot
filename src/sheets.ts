@@ -40,7 +40,7 @@ export async function exportToSheet(transactions: any[]) {
 
   try {
     const expenseByMonth: { [month: string]: any[] } = {};
-    const incomeByMonth: { [month: string]: { kategori: string, tanggal: string, amount: number }[] } = {};
+    const incomeByMonth: { [month: string]: { kategori: string, tanggal: string, amount: number, metodeBayar: string }[] } = {};
     
     for (const t of transactions) {
       const date = new Date(t.timestamp);
@@ -67,14 +67,12 @@ export async function exportToSheet(transactions: any[]) {
       }
 
       // Format tanggal
-      const longDate = date.toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
+      const formattedDate = date.toLocaleDateString('id-ID'); // DD/MM/YYYY
 
       if (t.type === 'expense') {
         if (!expenseByMonth[monthName]) expenseByMonth[monthName] = [];
         expenseByMonth[monthName].push([
-          longDate,       // H: TANGGAL
+          formattedDate,       // H: TANGGAL
           metodeBayar,    // I: METODE BAYAR
           kategoriStr,    // J: KATEGORI
           deskripsiStr,   // K: DESKRIPSI
@@ -83,7 +81,7 @@ export async function exportToSheet(transactions: any[]) {
       } else {
         // Income: simpan untuk dicocokkan ke baris existing berdasarkan KATEGORI
         if (!incomeByMonth[monthName]) incomeByMonth[monthName] = [];
-        incomeByMonth[monthName].push({ kategori: kategoriStr, tanggal: longDate, amount: t.amount });
+        incomeByMonth[monthName].push({ kategori: kategoriStr, tanggal: formattedDate, amount: t.amount, metodeBayar });
       }
     }
 
@@ -144,13 +142,14 @@ export async function exportToSheet(transactions: any[]) {
 
         const targetRow = rowIndex + 1; // 1-indexed
 
-        // Update kolom A (tanggal) dan E (ACTUAL) pada baris tersebut
+        // Update kolom A (tanggal), C (metode bayar) dan E (ACTUAL) pada baris tersebut
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: spreadSheetId,
           requestBody: {
             valueInputOption: 'USER_ENTERED',
             data: [
               { range: `${monthName}!A${targetRow}`, values: [[entry.tanggal]] },
+              { range: `${monthName}!C${targetRow}`, values: [[entry.metodeBayar]] },
               { range: `${monthName}!E${targetRow}`, values: [[entry.amount]] },
             ],
           },

@@ -56,7 +56,7 @@ const expenseCategoryKeywords: Array<{ category: string; keywords: RegExp[] }> =
   {
     category: 'Makanan & Minuman',
     keywords: [
-      /\bmakan\b/, /\bminum\b/, /\bkopi\b/, /\bteh\b/, /\bresto\b/, /\bwarteg\b/, /\bfood\b/, /\bbeli\b/, /\bsnack\b/, /\bcemilan\b/, /\bjemput\b/,
+      /\bmakan\b/, /\bminum\b/, /\bkopi\b/, /\bteh\b/, /\bresto\b/, /\bwarteg\b/, /\bfood\b/, /\bbeli\b/, /\bsnack\b/, /\bcemilan\b/, /\bjemput\b/, /\bbakso\b/, /\bmie\b/, /\bnasi\b/, /\btahu\b/, /\btempe\b/, /\bayam\b/, /\bsate\b/, /\bburger\b/, /\bpizza\b/,
     ],
   },
   { category: 'Entertaint', keywords: [/\bnonton\b/, /\bbioskop\b/, /\bnetflix\b/, /\bspotify\b/, /\bhbo\b/, /\bgame\b/, /\bhidup\s*\bhibur\b/] },
@@ -89,6 +89,12 @@ export function inferExpenseCategory(text: string): string {
 
   // Jika ada kata "beli" dan tidak ditemui kategori lain, asumsikan Makanan & Minuman
   if (/\bbeli\b/.test(lower)) {
+    return 'Makanan & Minuman';
+  }
+
+  // Jika formatnya cukup sederhana (kata + angka seperti "Bakso 10rb"), anggap ini Makanan & Minuman
+  // (agar tidak memaksa pengguna harus menulis keyword spesifik seperti "makan"/"minum").
+  if (/\b[a-zA-Z]+\b/.test(lower) && /\d/.test(lower)) {
     return 'Makanan & Minuman';
   }
 
