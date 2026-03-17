@@ -208,27 +208,36 @@ async function connectToWhatsApp() {
       // === AUTOMATION: coba parse transaksi dari teks biasa (misal "Beli Astor 25rb") ===
       const isCommandMessage = command.startsWith('!');
       if (!isCommandMessage && !state) {
-        const inferred = inferTransactionFromText(text);
-        if (inferred) {
-          try {
-            await addTransaction({
-              userId,
-              platform: 'whatsapp',
-              type: inferred.type,
-              amount: inferred.amount,
-              description: `${inferred.source}|${inferred.description}`,
-            });
-            await reply(
-              `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).\n\n_${getRandomQuote()}_`
-            );
-            continue;
-          } catch (error: any) {
-            console.error('Error when saving transaction (auto):', error);
-            const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
-            await reply(`❌ Terjadi kesalahan saat mencatat transaksi otomatis.${message}`);
-            continue;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        let successCount = 0;
+        let failCount = 0;
+        for (const line of lines) {
+          const inferred = inferTransactionFromText(line);
+          if (inferred) {
+            try {
+              await addTransaction({
+                userId,
+                platform: 'whatsapp',
+                type: inferred.type,
+                amount: inferred.amount,
+                description: `${inferred.source}|${inferred.description}`,
+              });
+              successCount++;
+            } catch (error: any) {
+              console.error('Error when saving transaction (auto):', error);
+              failCount++;
+            }
+          } else {
+            failCount++;
           }
         }
+        if (successCount > 0) {
+          await reply(`✅ Berhasil mencatat ${successCount} transaksi.\n\n_${getRandomQuote()}_`);
+        }
+        if (failCount > 0) {
+          await reply(`❌ ${failCount} baris gagal diproses. Pastikan format: 'Bakso 10rb pakai OVO' atau '!add expense 50000 Makan Siang'.`);
+        }
+        if (successCount + failCount > 0) continue;
       }
 
       // === CONVERSATION FLOW ===

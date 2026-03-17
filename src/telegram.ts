@@ -135,27 +135,38 @@ bot.on('text', async (ctx, next) => {
   const userId = ctx.from.id.toString();
   const state = userStates.get(userId);
 
-  // Automation: coba deteksi transaksi dari teks biasa (misal "Beli Astor 25rb")
+  // Automation: deteksi dan proses banyak transaksi dalam satu pesan (multi-line)
   if (!state) {
-    const inferred = inferTransactionFromText(ctx.message.text);
-    if (inferred) {
-      try {
-        await addTransaction({
-          userId,
-          platform: 'telegram',
-          type: inferred.type,
-          amount: inferred.amount,
-          description: `${inferred.source}|${inferred.description}`,
-        });
-        return ctx.reply(
-          `✅ Otomatis mencatat ${inferred.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${inferred.amount.toLocaleString('id-ID')} (${inferred.source}).\n\n_${getRandomQuote()}_`
-        );
-      } catch (error: any) {
-        console.error('Error when saving transaction (auto):', error);
-        const message = error?.message ? ` (${error.message})` : ` (${String(error)})`;
-        return ctx.reply(`❌ Terjadi kesalahan saat mencatat transaksi otomatis.${message}`);
+    const lines = ctx.message.text.split('\n').map(l => l.trim()).filter(l => l);
+    let successCount = 0;
+    let failCount = 0;
+    for (const line of lines) {
+      const inferred = inferTransactionFromText(line);
+      if (inferred) {
+        try {
+          await addTransaction({
+            userId,
+            platform: 'telegram',
+            type: inferred.type,
+            amount: inferred.amount,
+            description: `${inferred.source}|${inferred.description}`,
+          });
+          successCount++;
+        } catch (error: any) {
+          console.error('Error when saving transaction (auto):', error);
+          failCount++;
+        }
+      } else {
+        failCount++;
       }
     }
+    if (successCount > 0) {
+      await ctx.reply(`✅ Berhasil mencatat ${successCount} transaksi.\n\n_${getRandomQuote()}_`);
+    }
+    if (failCount > 0) {
+      await ctx.reply(`❌ ${failCount} baris gagal diproses. Pastikan format: 'Bakso 10rb pakai OVO' atau '/add expense 50000 Makan Siang'.`);
+    }
+    if (successCount + failCount > 0) return;
   }
 
   if (state && state.step === 'AWAITING_DESC') {

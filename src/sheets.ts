@@ -58,18 +58,30 @@ export async function exportToSheet(transactions: any[]) {
         deskripsiStr = pipeParts[1].trim();
       }
 
+
       // Parse kategori dan metode bayar dari mainPart
       kategoriStr = mainPart;
+      let foundMetode = false;
       if (mainPart.includes('(') && mainPart.includes(')')) {
         const parts = mainPart.split('(');
         kategoriStr = parts[0].trim();
         metodeBayar = parts[1].replace(')', '').trim();
+        foundMetode = true;
       } else {
-        // Tambahan: parsing otomatis "pakai <metode>" jika tidak ada tanda kurung
+        // Cek "pakai <metode>" di mainPart
         const pakaiMatch = mainPart.match(/pakai\s+([A-Za-z0-9]+)/i);
         if (pakaiMatch) {
           metodeBayar = pakaiMatch[1].toUpperCase();
           kategoriStr = mainPart.replace(/pakai\s+[A-Za-z0-9]+/i, '').trim();
+          foundMetode = true;
+        }
+      }
+      // Jika belum ketemu, cek di deskripsiStr
+      if (!foundMetode && deskripsiStr && deskripsiStr !== '-') {
+        const pakaiMatchDesc = deskripsiStr.match(/pakai\s+([A-Za-z0-9]+)/i);
+        if (pakaiMatchDesc) {
+          metodeBayar = pakaiMatchDesc[1].toUpperCase();
+          deskripsiStr = deskripsiStr.replace(/pakai\s+[A-Za-z0-9]+/i, '').trim();
         }
       }
 
