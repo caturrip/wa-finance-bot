@@ -60,6 +60,6 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// server.listen(PORT, () => {
-//   console.log(`Keep-alive server berjalan di port ${PORT}`);
-// });
+server.listen(PORT, () => {
+  console.log(`Keep-alive server berjalan di port ${PORT}`);
+});
