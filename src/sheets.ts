@@ -115,54 +115,25 @@ export async function exportToSheet(transactions: any[]) {
       const rows = readRes.data.values || [];
 
       for (const value of values) {
-        const tanggalBaru = value[0];
-        // Cari baris dengan tanggal yang sama
-        let rowIdx = -1;
+        let targetRow = DATA_START_ROW + rows.length;
+        let foundEmpty = false;
+        
+        // Cari baris kosong pertama (jika ada record yang telah dihapus)
         for (let i = 0; i < rows.length; i++) {
-          if (rows[i] && rows[i][0] && rows[i][0].trim() === tanggalBaru.trim()) {
-            rowIdx = DATA_START_ROW + i;
+          if (!rows[i] || !rows[i][0] || rows[i][0].toString().trim() === '') {
+            targetRow = DATA_START_ROW + i;
+            foundEmpty = true;
+            // Tandai baris kosong ini sudah terisi di lokal agar tidak ditimpa oleh perulangan berikutnya
+            rows[i] = [value[0]];
             break;
           }
         }
-        let targetRow = -1;
-        if (rowIdx !== -1) {
-          // Jika tanggal sudah ada, add row above
-          // Fetch numeric sheetId first because insertDimension requires numeric sheetId (defaults to 0 if undefined)
-          const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId: spreadSheetId });
-          const targetSheet = sheetInfo.data.sheets?.find(s => s.properties?.title === monthName);
-          const numericSheetId = targetSheet?.properties?.sheetId;
-
-          if (numericSheetId !== undefined) {
-            await sheets.spreadsheets.batchUpdate({
-              spreadsheetId: spreadSheetId,
-              requestBody: {
-                requests: [
-                  {
-                    insertDimension: {
-                      range: {
-                        sheetId: numericSheetId,
-                        dimension: 'ROWS',
-                        startIndex: rowIdx - 1,
-                        endIndex: rowIdx - 1 + 1,
-                      },
-                      inheritFromBefore: false,
-                    },
-                  },
-                ],
-              },
-            });
-          }
-          targetRow = rowIdx;
-        } else {
-          // Jika tanggal belum ada, cari baris kosong pertama
+        
+        if (!foundEmpty) {
           targetRow = DATA_START_ROW + rows.length;
-          for (let i = 0; i < rows.length; i++) {
-            if (!rows[i] || !rows[i][0] || rows[i][0].trim() === '') {
-              targetRow = DATA_START_ROW + i;
-              break;
-            }
-          }
+          rows.push([value[0]]);
         }
+
         // Tulis data ke kolom H:L pada baris targetRow
         await sheets.spreadsheets.values.update({
           spreadsheetId: spreadSheetId,

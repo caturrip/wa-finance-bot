@@ -3,6 +3,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -10,6 +11,7 @@ import * as QRCode from 'qrcode-terminal';
 import { addTransaction, getSummary, deleteTransaction } from './db';
 import { exportToSheet } from './sheets';
 import { inferTransactionFromText, parseAmount, getRandomQuote } from './utils';
+import { askPregnancyAI } from './pregnancyAI';
 
 const logger = pino({ level: 'info' }); // Diubah ke info untuk melihat log penting
 
@@ -79,10 +81,11 @@ async function connectToWhatsApp() {
       // Abaikan pesan dari grup
       if (from.endsWith('@g.us')) continue;
 
+      const m = msg.message;
+      const isImage = !!m.imageMessage;
       let text = '';
       try {
-        const m = msg.message;
-        text = m.conversation || m.extendedTextMessage?.text || '';
+        text = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || '';
       } catch (e) {
         console.error('Error extracting message text:', e);
       }
@@ -222,42 +225,75 @@ async function connectToWhatsApp() {
         continue;
       }
 
-      // === AUTOMATION: coba parse transaksi dari teks biasa (misal "Beli Astor 25rb") ===
+      // === AUTOMATION & AI: coba parse transaksi dari teks biasa (misal "Beli Astor 25rb") atau tangani dengan AI ===
       const isCommandMessage = command.startsWith('!');
       if (!isCommandMessage && !state) {
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-        let successCount = 0;
-        let failCount = 0;
-        const recordedIds: string[] = [];
-        for (const line of lines) {
-          const inferred = inferTransactionFromText(line);
-          if (inferred) {
-            try {
-              const tx = await addTransaction({
-                userId,
-                platform: 'whatsapp',
-                type: inferred.type,
-                amount: inferred.amount,
-                description: `${inferred.source}|${inferred.description}`,
-                ...(inferred.timestamp ? { timestamp: inferred.timestamp } : {}),
-              });
-              successCount++;
-              recordedIds.push(tx.id.split('-')[0]);
-            } catch (error: any) {
-              console.error('Error when saving transaction (auto):', error);
-              failCount++;
+        let anyTransactionFound = false;
+
+        if (text) {
+          const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+          let successCount = 0;
+          let failCount = 0;
+          const recordedIds: string[] = [];
+
+          for (const line of lines) {
+            const inferred = inferTransactionFromText(line);
+            if (inferred) {
+              anyTransactionFound = true;
+              try {
+                const tx = await addTransaction({
+                  userId,
+                  platform: 'whatsapp',
+                  type: inferred.type,
+                  amount: inferred.amount,
+                  description: `${inferred.source}|${inferred.description}`,
+                  ...(inferred.timestamp ? { timestamp: inferred.timestamp } : {}),
+                });
+                successCount++;
+                recordedIds.push(tx.id.split('-')[0]);
+              } catch (error: any) {
+                console.error('Error when saving transaction (auto):', error);
+                failCount++;
+              }
             }
-          } else {
-            failCount++;
+          }
+
+          if (anyTransactionFound) {
+            if (successCount > 0) {
+              await reply(`✅ Berhasil mencatat ${successCount} transaksi.\nID: ${recordedIds.join(', ')}\n\n_${getRandomQuote()}_`);
+            }
+            if (failCount > 0) {
+              await reply(`❌ Beberapa baris gagal diproses sebagai transaksi keuangan.`);
+            }
+            continue;
           }
         }
-        if (successCount > 0) {
-          await reply(`✅ Berhasil mencatat ${successCount} transaksi.\nID: ${recordedIds.join(', ')}\n\n_${getRandomQuote()}_`);
+
+        // Jika bukan command DAN bukan transaksi keuangan, maka lempar ke Konsultan Kehamilan AI!
+        if (!anyTransactionFound && (text !== '' || isImage)) {
+          try {
+            let imageBuffer: Buffer | undefined;
+            let mimeType: string | undefined;
+
+            if (isImage) {
+              await reply('Menerima gambar, sebentar sedang menganalisis keamanannya untuk ibu hamil...');
+              imageBuffer = await downloadMediaMessage(
+                msg,
+                'buffer',
+                {},
+                { logger, reuploadRequest: sock.updateMediaMessage }
+              ) as Buffer;
+              mimeType = m.imageMessage?.mimetype || 'image/jpeg';
+            }
+
+            const aiReply = await askPregnancyAI(text, imageBuffer, mimeType);
+            await reply(aiReply);
+          } catch (err) {
+            console.error('Error handling AI query:', err);
+            await reply('Maaf, ada kendala saat memproses pertanyaan Anda melalui AI.');
+          }
+          continue;
         }
-        if (failCount > 0) {
-          await reply(`❌ ${failCount} baris gagal diproses. Pastikan format: 'Bakso 10rb pakai OVO' atau '!add expense 50000 Makan Siang'.`);
-        }
-        if (successCount + failCount > 0) continue;
       }
 
       // === CONVERSATION FLOW ===
