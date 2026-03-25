@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import http from 'http';
 import { startTelegramBot } from './telegram';
 import { startWhatsAppBot, latestQr } from './whatsapp';
 
-dotenv.config({ override: true });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 console.log('Starting Finance Bots...');
 
@@ -59,6 +60,6 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Keep-alive server berjalan di port ${PORT}`);
-});
+// server.listen(PORT, () => {
+//   console.log(`Keep-alive server berjalan di port ${PORT}`);
+// });
