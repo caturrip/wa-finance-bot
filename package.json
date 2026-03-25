@@ -22,14 +22,17 @@
     "@hapi/boom": "^10.0.1",
     "@prisma/client": "^6.19.2",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "googleapis": "^171.4.0",
+    "node-schedule": "^2.1.1",
     "pino": "^10.3.1",
     "qrcode-terminal": "^0.12.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/node-schedule": "^2.1.8",
     "@types/qrcode-terminal": "^0.12.2",
     "prisma": "^6.19.2",
     "ts-node": "^10.9.2",

@@ -336,3 +336,29 @@ export async function deleteFromSheet(transaction: any) {
   }
 }
 
+export async function exportToJurnal(date: Date, keluhan: string, saranAI: string) {
+  const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  if (!spreadSheetId) return;
+
+  const auth = await getAuthToken();
+  if (!auth) return;
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  const formattedDate = date.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: spreadSheetId,
+      range: 'Jurnal!A:C',
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: {
+        values: [[formattedDate, keluhan, saranAI]]
+      }
+    });
+  } catch (error: any) {
+    console.error('Gagal export ke Jurnal (kemungkinan tab Jurnal belum dibuat):', error.message);
+  }
+}
+
+

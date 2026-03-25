@@ -12,6 +12,9 @@ import { addTransaction, getSummary, deleteTransaction } from './db';
 import { exportToSheet } from './sheets';
 import { inferTransactionFromText, parseAmount, getRandomQuote } from './utils';
 import { askPregnancyAI } from './pregnancyAI';
+import { initPregnancyReminders, saveObgynDate, saveReminderUser, processJournalEntry } from './pregnancyJournal';
+
+let globalSendMessage: (jid: string, text: string) => Promise<any> = async () => {};
 
 const logger = pino({ level: 'info' }); // Diubah ke info untuk melihat log penting
 
@@ -39,6 +42,9 @@ async function connectToWhatsApp() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+  globalSendMessage = async (jid: string, text: string) => {
+    return sock.sendMessage(jid, { text });
+  };
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -102,6 +108,8 @@ async function connectToWhatsApp() {
 
       const reply = (replyText: string) =>
         sock.sendMessage(from, { text: replyText });
+      
+      saveReminderUser(userId); // Ensure user is registered for receiving scheduled pregnancy reminders
 
       // === COMMANDS ===
       if (command === '!ping') {
@@ -209,18 +217,37 @@ async function connectToWhatsApp() {
         continue;
       }
 
+      if (command === '!set_obgyn' && args.length > 1) {
+        const dateStr = args[1]; // Format YYYY-MM-DD
+        saveObgynDate(userId, dateStr);
+        await reply(`✅ Jadwal Obgyn berhasil diatur ke tanggal ${dateStr}. Anda akan menerima pengingat pada H-3, H-1, dan hari H!`);
+        continue;
+      }
+
+      if (command === '!jurnal' && args.length > 1) {
+        const keluhan = args.slice(1).join(' ');
+        await reply('📝 Menyimpan jurnal harian Anda ke Google Sheets & meminta saran...');
+        try {
+          const saran = await processJournalEntry(keluhan);
+          await reply(`✅ Jurnal berhasil dicatat di tab "Jurnal"!\n\n${saran}`);
+        } catch (error: any) {
+          await reply(`❌ Gagal menyimpan jurnal. ${error.message}`);
+        }
+        continue;
+      }
+
       if (command === '!help' || command === '!menu') {
         await reply(
-          'Catur Finance Bot 💰\n\n' +
-          '!add → Tambah transaksi baru (atau: !add income 50000 Gaji)\n' +
+          'Catur Finance Bot 💰 & Pregnancy Assistant 👶\n\n' +
+          '!add → Tambah transaksi baru\n' +
           '!summary daily → Rekap hari ini\n' +
           '!summary monthly → Rekap bulan ini\n' +
           '!export → Export ke Google Sheets\n' +
-          '\nCara input transaksi backdated:' +
-          '\n- Tambahkan tanggal di akhir transaksi, misal:' +
-          '\n  Mie ayam 20rb pakai GOPAY 15/3/2026' +
-          '\n  Transfer ke Tante Anna 1,5jt pakai BCA 2026-03-15' +
-          '\n- Bot akan otomatis mencatat sesuai tanggal yang diinput, dan menambah row jika tanggal sudah terisi.'
+          '!set_obgyn YYYY-MM-DD → Atur jadwal Obgyn\n' +
+          '!jurnal keluhan → Curhat & direspons AI\n' +
+          '\nKirim chat bebas/kirim foto produk untuk panduan kehamilan otomatis dari AI!\n\n' +
+          'Cara input transaksi backdated:\n' +
+          '- Tambah tanggal di akhir, misal: Mie ayam 20rb 15/3/2026'
         );
         continue;
       }
@@ -397,4 +424,7 @@ async function connectToWhatsApp() {
 export const startWhatsAppBot = () => {
   console.log('Initializing WhatsApp bot (Baileys)...');
   connectToWhatsApp().catch(console.error);
+  initPregnancyReminders(async (jid, text) => {
+    await globalSendMessage(jid, text);
+  });
 };
