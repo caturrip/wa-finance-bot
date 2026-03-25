@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 export const prisma = new PrismaClient();
 
-import { exportToSheet } from './sheets';
+import { exportToSheet, deleteFromSheet } from './sheets';
 
 export async function addTransaction(data: {
   userId: string;
@@ -78,4 +78,32 @@ export async function getMonthlyTransactions(year: number, month: number) {
       timestamp: 'asc',
     },
   });
+}
+
+export async function deleteTransaction(id: string) {
+  const transaction = await prisma.transaction.findFirst({
+    where: {
+      id: {
+        startsWith: id,
+      },
+    },
+  });
+
+  if (!transaction) {
+    throw new Error('Transaksi tidak ditemukan.');
+  }
+
+  await prisma.transaction.delete({
+    where: {
+      id: transaction.id,
+    },
+  });
+
+  try {
+    await deleteFromSheet(transaction);
+  } catch (error) {
+    console.error('Failed to auto-sync deletion to Google Sheet:', error);
+  }
+
+  return transaction;
 }

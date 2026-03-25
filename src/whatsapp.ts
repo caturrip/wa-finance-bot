@@ -7,7 +7,7 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import * as QRCode from 'qrcode-terminal';
-import { addTransaction, getSummary } from './db';
+import { addTransaction, getSummary, deleteTransaction } from './db';
 import { exportToSheet } from './sheets';
 import { inferTransactionFromText, parseAmount, getRandomQuote } from './utils';
 
@@ -132,7 +132,7 @@ async function connectToWhatsApp() {
               const finalDescription = `${source}|${desc}`;
 
               try {
-                await addTransaction({
+                const tx = await addTransaction({
                   userId,
                   platform: 'whatsapp',
                   type: typeArg as 'income' | 'expense',
@@ -140,7 +140,7 @@ async function connectToWhatsApp() {
                   description: finalDescription,
                 });
                 await reply(
-                  `✅ Berhasil mencatat ${typeArg === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${source}${desc ? ` - ${desc}` : ''}).`
+                  `✅ Berhasil mencatat ${typeArg === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${source}${desc ? ` - ${desc}` : ''}).\nID: ${tx.id.split('-')[0]}`
                 );
                 continue;
               } catch (error: any) {
@@ -194,6 +194,18 @@ async function connectToWhatsApp() {
         continue;
       }
 
+      if (command === '!delete' && args.length > 1) {
+        const idToDelete = args[1];
+        try {
+          const deletedTx = await deleteTransaction(idToDelete);
+          await reply(`✅ Berhasil menghapus transaksi:\n${deletedTx.type === 'income' ? 'Pemasukan' : 'Pengeluaran'} Rp${deletedTx.amount.toLocaleString('id-ID')} (${deletedTx.description})\nID: ${deletedTx.id.split('-')[0]}`);
+        } catch (error: any) {
+          const msg = error?.message || 'Error occurred';
+          await reply(`❌ Gagal menghapus transaksi. ${msg}`);
+        }
+        continue;
+      }
+
       if (command === '!help' || command === '!menu') {
         await reply(
           'Catur Finance Bot 💰\n\n' +
@@ -216,11 +228,12 @@ async function connectToWhatsApp() {
         const lines = text.split('\n').map(l => l.trim()).filter(l => l);
         let successCount = 0;
         let failCount = 0;
+        const recordedIds: string[] = [];
         for (const line of lines) {
           const inferred = inferTransactionFromText(line);
           if (inferred) {
             try {
-              await addTransaction({
+              const tx = await addTransaction({
                 userId,
                 platform: 'whatsapp',
                 type: inferred.type,
@@ -229,6 +242,7 @@ async function connectToWhatsApp() {
                 ...(inferred.timestamp ? { timestamp: inferred.timestamp } : {}),
               });
               successCount++;
+              recordedIds.push(tx.id.split('-')[0]);
             } catch (error: any) {
               console.error('Error when saving transaction (auto):', error);
               failCount++;
@@ -238,7 +252,7 @@ async function connectToWhatsApp() {
           }
         }
         if (successCount > 0) {
-          await reply(`✅ Berhasil mencatat ${successCount} transaksi.\n\n_${getRandomQuote()}_`);
+          await reply(`✅ Berhasil mencatat ${successCount} transaksi.\nID: ${recordedIds.join(', ')}\n\n_${getRandomQuote()}_`);
         }
         if (failCount > 0) {
           await reply(`❌ ${failCount} baris gagal diproses. Pastikan format: 'Bakso 10rb pakai OVO' atau '!add expense 50000 Makan Siang'.`);
@@ -318,7 +332,7 @@ async function connectToWhatsApp() {
             : `${state.source}|${state.desc || ''}`;
 
           try {
-            await addTransaction({
+            const tx = await addTransaction({
               userId,
               platform: 'whatsapp',
               type: state.type as 'income' | 'expense',
@@ -326,7 +340,7 @@ async function connectToWhatsApp() {
               description: finalDescription,
             });
             await reply(
-              `✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${state.source}).\n\n_${getRandomQuote()}_`
+              `✅ Berhasil mencatat ${state.type === 'income' ? 'pemasukan' : 'pengeluaran'} sebesar Rp${amount.toLocaleString('id-ID')} (${state.source}).\nID: ${tx.id.split('-')[0]}\n\n_${getRandomQuote()}_`
             );
             userStates.delete(userId);
           } catch (error: any) {

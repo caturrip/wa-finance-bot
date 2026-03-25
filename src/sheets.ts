@@ -215,3 +215,137 @@ export async function exportToSheet(transactions: any[]) {
   }
 }
 
+export async function deleteFromSheet(transaction: any) {
+  const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  if (!spreadSheetId) {
+    throw new Error('GOOGLE_SPREADSHEET_ID is not set');
+  }
+
+  const auth = await getAuthToken();
+  if (!auth) {
+    throw new Error('Google Sheets auth token could not be created (check GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY)');
+  }
+
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+
+  try {
+    const date = new Date(transaction.timestamp);
+    const monthName = monthNames[date.getMonth()];
+    
+    // Parse format "Kategori (MetodeBayar)|Deskripsi" dari description
+    let kategoriStr = transaction.description;
+    let metodeBayar = '-';
+    let deskripsiStr = '-';
+
+    const pipeParts = transaction.description.split('|');
+    const mainPart = pipeParts[0].trim();
+    if (pipeParts[1] !== undefined && pipeParts[1].trim() !== '') {
+      deskripsiStr = pipeParts[1].trim();
+    }
+
+    kategoriStr = mainPart;
+    let foundMetode = false;
+    if (mainPart.includes('(') && mainPart.includes(')')) {
+      const parts = mainPart.split('(');
+      kategoriStr = parts[0].trim();
+      metodeBayar = parts[1].replace(')', '').trim();
+      foundMetode = true;
+    } else {
+      const pakaiMatch = mainPart.match(/pakai\s+([A-Za-z0-9]+)/i);
+      if (pakaiMatch) {
+        metodeBayar = pakaiMatch[1].toUpperCase();
+        kategoriStr = mainPart.replace(/pakai\s+[A-Za-z0-9]+/i, '').trim();
+        foundMetode = true;
+      }
+    }
+    if (!foundMetode && deskripsiStr && deskripsiStr !== '-') {
+      const pakaiMatchDesc = deskripsiStr.match(/pakai\s+([A-Za-z0-9]+)/i);
+      if (pakaiMatchDesc) {
+        metodeBayar = pakaiMatchDesc[1].toUpperCase();
+        deskripsiStr = deskripsiStr.replace(/pakai\s+[A-Za-z0-9]+/i, '').trim();
+      }
+    }
+
+    const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    if (transaction.type === 'expense') {
+      const DATA_START_ROW = 14;
+      const readRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: spreadSheetId,
+        range: `${monthName}!H${DATA_START_ROW}:L1000`,
+      });
+      const rows = readRes.data.values || [];
+      let targetRow = -1;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+        const rDate = row[0] ? row[0].toString().trim() : '';
+        const rMetode = row[1] ? row[1].toString().trim() : '';
+        const rKategori = row[2] ? row[2].toString().trim() : '';
+        const rDeskripsi = row[3] ? row[3].toString().trim() : '';
+        const amtStr = row[4] ? row[4].toString().replace(/[^0-9]/g, '') : '0';
+        const rAmount = parseInt(amtStr, 10);
+        
+        if (rDate === formattedDate && 
+            rMetode === metodeBayar && 
+            rKategori === kategoriStr && 
+            rDeskripsi === deskripsiStr && 
+            rAmount === Math.floor(transaction.amount)) {
+          targetRow = DATA_START_ROW + i;
+          break;
+        }
+      }
+
+      if (targetRow !== -1) {
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: spreadSheetId,
+          range: `${monthName}!H${targetRow}:L${targetRow}`,
+        });
+        console.log(`Cleared expense row ${targetRow} in sheet ${monthName}`);
+      } else {
+        console.warn('Row not found for deletion in expense sheet');
+      }
+
+    } else {
+      // Income
+      const readRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: spreadSheetId,
+        range: `${monthName}!A1:E50`,
+      });
+      const allRows = readRes.data.values || [];
+      const rowIndex = allRows.findIndex(row => {
+        const kCell = (row[1] || '').toString().trim().toLowerCase();
+        return kCell === kategoriStr.toLowerCase();
+      });
+
+      if (rowIndex !== -1) {
+        const targetRow = rowIndex + 1;
+        await sheets.spreadsheets.values.batchClear({
+          spreadsheetId: spreadSheetId,
+          requestBody: {
+            ranges: [
+              `${monthName}!A${targetRow}`,
+              `${monthName}!C${targetRow}`,
+              `${monthName}!E${targetRow}`
+            ]
+          }
+        });
+        console.log(`Cleared income data at row ${targetRow} in sheet ${monthName}`);
+      } else {
+        console.warn('Row not found for deletion in income sheet');
+      }
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error('Error deleting from specific sheet:', error);
+    throw error;
+  }
+}
+
