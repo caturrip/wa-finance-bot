@@ -127,24 +127,31 @@ export async function exportToSheet(transactions: any[]) {
         let targetRow = -1;
         if (rowIdx !== -1) {
           // Jika tanggal sudah ada, add row above
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: spreadSheetId,
-            requestBody: {
-              requests: [
-                {
-                  insertDimension: {
-                    range: {
-                      sheetId: undefined, // biarkan kosong agar pakai nama
-                      dimension: 'ROWS',
-                      startIndex: rowIdx - 1,
-                      endIndex: rowIdx - 1 + 1,
+          // Fetch numeric sheetId first because insertDimension requires numeric sheetId (defaults to 0 if undefined)
+          const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId: spreadSheetId });
+          const targetSheet = sheetInfo.data.sheets?.find(s => s.properties?.title === monthName);
+          const numericSheetId = targetSheet?.properties?.sheetId;
+
+          if (numericSheetId !== undefined) {
+            await sheets.spreadsheets.batchUpdate({
+              spreadsheetId: spreadSheetId,
+              requestBody: {
+                requests: [
+                  {
+                    insertDimension: {
+                      range: {
+                        sheetId: numericSheetId,
+                        dimension: 'ROWS',
+                        startIndex: rowIdx - 1,
+                        endIndex: rowIdx - 1 + 1,
+                      },
+                      inheritFromBefore: false,
                     },
-                    inheritFromBefore: false,
                   },
-                },
-              ],
-            },
-          });
+                ],
+              },
+            });
+          }
           targetRow = rowIdx;
         } else {
           // Jika tanggal belum ada, cari baris kosong pertama
@@ -275,28 +282,37 @@ export async function deleteFromSheet(transaction: any) {
 
     if (transaction.type === 'expense') {
       const DATA_START_ROW = 14;
-      const readRes = await sheets.spreadsheets.values.get({
+      const readResStr = await sheets.spreadsheets.values.get({
         spreadsheetId: spreadSheetId,
-        range: `${monthName}!H${DATA_START_ROW}:L1000`,
+        range: `${monthName}!H${DATA_START_ROW}:K1000`,
+        valueRenderOption: 'FORMATTED_VALUE',
       });
-      const rows = readRes.data.values || [];
+      const readResNum = await sheets.spreadsheets.values.get({
+        spreadsheetId: spreadSheetId,
+        range: `${monthName}!L${DATA_START_ROW}:L1000`,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      });
+
+      const strRows = readResStr.data.values || [];
+      const numRows = readResNum.data.values || [];
       let targetRow = -1;
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-        const rDate = row[0] ? row[0].toString().trim() : '';
-        const rMetode = row[1] ? row[1].toString().trim() : '';
-        const rKategori = row[2] ? row[2].toString().trim() : '';
-        const rDeskripsi = row[3] ? row[3].toString().trim() : '';
-        const amtStr = row[4] ? row[4].toString().replace(/[^0-9]/g, '') : '0';
-        const rAmount = parseInt(amtStr, 10);
+      for (let i = 0; i < strRows.length; i++) {
+        const strRow = strRows[i] || [];
+        const numRow = numRows[i] || [];
+
+        const rDate = strRow[0] ? strRow[0].toString().trim() : '';
+        const rMetode = strRow[1] ? strRow[1].toString().trim() : '';
+        const rKategori = strRow[2] ? strRow[2].toString().trim() : '';
+        const rDeskripsi = strRow[3] ? strRow[3].toString().trim() : '';
+        
+        const rAmount = numRow[0] != null ? Number(numRow[0]) : 0;
         
         if (rDate === formattedDate && 
             rMetode === metodeBayar && 
             rKategori === kategoriStr && 
             rDeskripsi === deskripsiStr && 
-            rAmount === Math.floor(transaction.amount)) {
+            rAmount === transaction.amount) {
           targetRow = DATA_START_ROW + i;
           break;
         }
