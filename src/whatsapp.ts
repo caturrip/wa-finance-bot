@@ -87,6 +87,20 @@ async function connectToWhatsApp() {
       // Abaikan pesan dari grup
       if (from.endsWith('@g.us')) continue;
 
+      // === WHITELIST: Hanya nomor yang diizinkan yang bisa pakai bot ===
+      const allowedNumbers = (process.env.ALLOWED_NUMBERS || '')
+        .split(',')
+        .map(n => n.trim())
+        .filter(n => n);
+
+      if (allowedNumbers.length > 0) {
+        const senderNumber = from.replace('@s.whatsapp.net', '');
+        if (!allowedNumbers.includes(senderNumber)) {
+          await sock.sendMessage(from, { text: '⛔ Maaf, kamu tidak memiliki akses untuk menggunakan bot ini.' });
+          continue;
+        }
+      }
+
       const m = msg.message;
       const isImage = !!m.imageMessage;
       let text = '';

@@ -37,5 +37,13 @@
     "prisma": "^6.19.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/caturrip/wa-finance-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/caturrip/wa-finance-bot/issues"
+  },
+  "homepage": "https://github.com/caturrip/wa-finance-bot#readme"
 }

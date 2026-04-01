@@ -140,9 +140,30 @@ export function inferTransactionFromText(text: string): InferredTransaction | nu
   const normalized = text.trim();
   if (!normalized) return null;
 
+  // ===== FILTER: Pesan yang jelas bukan transaksi =====
+
+  const lower = normalized.toLowerCase();
+
+  // 1. Jika ada tanda tanya, kemungkinan besar ini pertanyaan, bukan transaksi
+  if (normalized.includes('?')) return null;
+
+  // 2. Jika pesan terlalu panjang (>15 kata), kemungkinan besar percakapan/pertanyaan, bukan catatan transaksi
+  const wordCount = normalized.split(/\s+/).length;
+  if (wordCount > 15) return null;
+
+  // 3. Deteksi kata-kata kontekstual yang sering diikuti angka non-uang
+  //    Contoh: "trimester 1", "anak 2", "minggu ke 3", "bulan ke 5", "hari ke 10", "tahap 2"
+  const contextualNumberPattern = /\b(trimester|semester|anak|minggu|bulan\s+ke|hari\s+ke|tahap|fase|stage|level|no|nomor|jam|pukul|umur|usia|ke)\s*-?\s*\d+/i;
+  if (contextualNumberPattern.test(normalized)) {
+    // Cek apakah ada angka lain yang BISA jadi nominal uang (misal ada "rb", "ribu", "jt", "juta", "000")
+    const hasMoneyAmount = /\d+\s*(rb|ribu|jt|juta|k)\b/i.test(normalized) || /\d{4,}/.test(normalized);
+    if (!hasMoneyAmount) return null;
+  }
+
+  // ===== PARSING TRANSAKSI =====
+
   // Tidak perlu parsing tanggal, selalu pakai hari ini
   const tanggal = new Date();
-  const tanggalStr = '';
 
   // Cari nominal di teks
   const tokens = normalized.split(/\s+/);
@@ -159,8 +180,10 @@ export function inferTransactionFromText(text: string): InferredTransaction | nu
 
   if (amount === null) return null;
 
+  // 4. Minimum nominal transaksi: Rp 500 (angka kecil seperti 1, 2, 3 bukan nominal uang)
+  if (amount < 500) return null;
+
   // Tentukan apakah ini income atau expense. Default = expense.
-  const lower = normalized.toLowerCase();
   const isIncome = /\b(income|gaji|thr|bonus|pemasukan)\b/.test(lower);
   const type: 'income' | 'expense' = isIncome ? 'income' : 'expense';
 
