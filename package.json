@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "prestart": "npx prisma migrate deploy && node dist/seed.js && npm run import-sheets",
+    "prestart": "npx prisma migrate deploy && node dist/seed.js",
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "seed": "node dist/seed.js",

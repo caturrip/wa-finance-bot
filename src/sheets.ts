@@ -234,6 +234,121 @@ export async function getGoalsFromSheet() {
   }
 }
 
+// Helper untuk parsing tanggal format "Monday, March 16, 2026"
+function parseDateString(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+export async function getAllTransactionsFromSheet() {
+  const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  if (!spreadSheetId) return [];
+
+  const auth = await getAuthToken();
+  if (!auth) return [];
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+
+  // Request batchGet untuk 12 bulan x 2 range (expense dan income) = 24 range
+  const ranges: string[] = [];
+  for (const month of monthNames) {
+    ranges.push(`${month}!H14:L1000`); // Expense
+    ranges.push(`${month}!A2:E50`);    // Income
+  }
+
+  try {
+    const response = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: spreadSheetId,
+      ranges: ranges,
+    });
+
+    const valueRanges = response.data.valueRanges || [];
+    const transactions: any[] = [];
+    const defaultUserId = '082246167772@s.whatsapp.net';
+
+    let idCounter = 1;
+
+    // Loop through valueRanges. Genap = Expense, Ganjil = Income
+    for (let i = 0; i < valueRanges.length; i++) {
+      const isExpense = i % 2 === 0;
+      const rows = valueRanges[i].values || [];
+
+      for (const row of rows) {
+        if (isExpense) {
+          // H: Tanggal, I: Metode Bayar, J: Kategori, K: Deskripsi, L: Amount
+          if (!row[0] || !row[4]) continue;
+          
+          const dateStr = row[0].toString().trim();
+          const metodeBayar = (row[1] || '').toString().trim();
+          const kategori = (row[2] || 'Lainnya').toString().trim();
+          const deskripsi = (row[3] || '').toString().trim();
+          const amountStr = row[4].toString().replace(/[^0-9.-]+/g, '');
+          const amount = parseFloat(amountStr);
+
+          if (isNaN(amount) || amount === 0) continue;
+
+          const timestamp = parseDateString(dateStr) || new Date();
+          const finalDescription = metodeBayar !== '-' && metodeBayar !== '' 
+            ? `${kategori} (${metodeBayar})|${deskripsi === '-' ? '' : deskripsi}`
+            : `${kategori}|${deskripsi === '-' ? '' : deskripsi}`;
+
+          transactions.push({
+            id: `sheet_exp_${idCounter++}`,
+            userId: defaultUserId,
+            platform: 'whatsapp',
+            type: 'expense',
+            amount: amount,
+            description: finalDescription,
+            timestamp: timestamp
+          });
+        } else {
+          // Income
+          // A: Tanggal, B: Kategori, C: Metode Bayar, D: -, E: Amount
+          if (!row[0] || !row[4]) continue;
+
+          const dateStr = row[0].toString().trim();
+          const kategori = (row[1] || 'Lainnya').toString().trim();
+          const metodeBayar = (row[2] || '').toString().trim();
+          const amountStr = row[4].toString().replace(/[^0-9.-]+/g, '');
+          const amount = parseFloat(amountStr);
+
+          if (isNaN(amount) || amount === 0) continue;
+
+          const timestamp = parseDateString(dateStr) || new Date();
+          const finalDescription = metodeBayar !== '-' && metodeBayar !== '' 
+            ? `${kategori} (${metodeBayar})|`
+            : `${kategori}|`;
+
+          transactions.push({
+            id: `sheet_inc_${idCounter++}`,
+            userId: defaultUserId,
+            platform: 'whatsapp',
+            type: 'income',
+            amount: amount,
+            description: finalDescription,
+            timestamp: timestamp
+          });
+        }
+      }
+    }
+
+    // Sort transactions by date descending (newest first)
+    transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    return transactions;
+  } catch (error) {
+    console.error('Failed to batchGet transactions from Google Sheets:', error);
+    return []; // Return empty array on error so dashboard doesn't break
+  }
+}
+
 
 export async function deleteFromSheet(transaction: any) {
   const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;

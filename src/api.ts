@@ -122,10 +122,11 @@ async function handleSummary(res: ServerResponse) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // Get all transactions from Google Sheets
+  const allTx = await getAllTransactionsFromSheet();
+
   // Monthly transactions
-  const monthlyTx = await prisma.transaction.findMany({
-    where: { timestamp: { gte: startOfMonth } },
-  });
+  const monthlyTx = allTx.filter(t => t.timestamp.getTime() >= startOfMonth.getTime());
 
   const monthlyIncome = monthlyTx
     .filter(t => t.type === 'income')
@@ -136,7 +137,6 @@ async function handleSummary(res: ServerResponse) {
   const transactionCount = monthlyTx.length;
 
   // All-time balance
-  const allTx = await prisma.transaction.findMany();
   const totalIncome = allTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
   const totalExpense = allTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const totalBalance = totalIncome - totalExpense;
@@ -159,7 +159,7 @@ async function handleSummary(res: ServerResponse) {
   });
 }
 
-import { getGoalsFromSheet } from './sheets';
+import { getGoalsFromSheet, getAllTransactionsFromSheet } from './sheets';
 
 async function handleGoals(res: ServerResponse) {
   // Coba ambil dari Google Sheets terlebih dahulu
@@ -179,9 +179,10 @@ async function handleExpenseCategories(res: ServerResponse) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const monthlyExpenses = await prisma.transaction.findMany({
-    where: { type: 'expense', timestamp: { gte: startOfMonth } },
-  });
+  const allTx = await getAllTransactionsFromSheet();
+  const monthlyExpenses = allTx.filter(
+    t => t.type === 'expense' && t.timestamp.getTime() >= startOfMonth.getTime()
+  );
 
   // Group by category
   const categoryMap: Record<string, { count: number; total: number }> = {};
@@ -213,9 +214,10 @@ async function handleExpenseByCategory(res: ServerResponse) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const monthlyExpenses = await prisma.transaction.findMany({
-    where: { type: 'expense', timestamp: { gte: startOfMonth } },
-  });
+  const allTx = await getAllTransactionsFromSheet();
+  const monthlyExpenses = allTx.filter(
+    t => t.type === 'expense' && t.timestamp.getTime() >= startOfMonth.getTime()
+  );
 
   const categoryMap: Record<string, number> = {};
   for (const tx of monthlyExpenses) {
@@ -244,13 +246,13 @@ async function handleMonthlyCashflow(res: ServerResponse) {
   const currentYear = now.getFullYear();
 
   // Get all transactions for the current year
-  const yearStart = new Date(currentYear, 0, 1);
-  const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+  const yearStart = new Date(currentYear, 0, 1).getTime();
+  const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999).getTime();
 
-  const yearTx = await prisma.transaction.findMany({
-    where: {
-      timestamp: { gte: yearStart, lte: yearEnd },
-    },
+  const allTx = await getAllTransactionsFromSheet();
+  const yearTx = allTx.filter(t => {
+    const time = t.timestamp.getTime();
+    return time >= yearStart && time <= yearEnd;
   });
 
   const cashflow = months.map((month, idx) => {
@@ -273,10 +275,8 @@ async function handleMonthlyCashflow(res: ServerResponse) {
 }
 
 async function handleTransactions(res: ServerResponse) {
-  const transactions = await prisma.transaction.findMany({
-    orderBy: { timestamp: 'desc' },
-    take: 50,
-  });
+  const allTx = await getAllTransactionsFromSheet();
+  const transactions = allTx.slice(0, 50); // Get latest 50
 
   const formatted = transactions.map(tx => ({
     id: tx.id,
