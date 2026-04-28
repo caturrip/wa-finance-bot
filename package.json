@@ -9,6 +9,7 @@
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "seed": "ts-node src/seed.ts",
+    "import-sheets": "ts-node src/import-sheets.ts",
     "postinstall": "prisma generate",
     "studio": "prisma studio",
     "db": "prisma studio",
