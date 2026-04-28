@@ -19,3 +19,25 @@ model Transaction {
   description String
   timestamp   DateTime @default(now())
 }
+
+model SavingGoal {
+  id       String @id @default(uuid())
+  name     String
+  icon     String @default("")
+  target   Float
+  current  Float  @default(0)
+  deadline String @default("")
+  color    String @default("from-finance-400 to-finance-600")
+  emoji    String @default("")
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  color     String   @default("bg-finance-100")
+  darkColor String   @default("dark:bg-finance-300/15")
+  accent    String   @default("bg-finance-300")
+  author    String   @default("")
+  createdAt DateTime @default(now())
+}

@@ -193,6 +193,48 @@ export async function exportToSheet(transactions: any[]) {
   }
 }
 
+export async function getGoalsFromSheet() {
+  const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  if (!spreadSheetId) return [];
+
+  const auth = await getAuthToken();
+  if (!auth) return [];
+
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  try {
+    // Asumsi: Ada tab bernama "Goals" dengan kolom:
+    // A: Name, B: Target, C: Current, D: Deadline, E: Emoji, F: Color
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadSheetId,
+      range: 'Goals!A2:F20', // Membaca dari baris 2 s.d 20
+    });
+
+    const rows = res.data.values || [];
+    const goals = rows.map((row, index) => {
+      const target = parseFloat(row[1]?.replace(/[^0-9.-]+/g, '') || '0');
+      const current = parseFloat(row[2]?.replace(/[^0-9.-]+/g, '') || '0');
+      
+      return {
+        id: `goal_${index}`,
+        name: row[0] || 'Unknown Goal',
+        target: isNaN(target) ? 0 : target,
+        current: isNaN(current) ? 0 : current,
+        deadline: row[3] || '',
+        emoji: row[4] || '🎯',
+        color: row[5] || 'from-finance-400 to-finance-600',
+        icon: row[4] || '🎯',
+      };
+    });
+
+    return goals;
+  } catch (error) {
+    console.warn('Gagal membaca tab Goals dari Google Sheets (mungkin tab tidak ada):', error);
+    return null; // Return null to fallback to database
+  }
+}
+
+
 export async function deleteFromSheet(transaction: any) {
   const spreadSheetId = process.env.GOOGLE_SPREADSHEET_ID;
   if (!spreadSheetId) {

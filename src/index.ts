@@ -3,6 +3,7 @@ import path from 'path';
 import http from 'http';
 import { startTelegramBot } from './telegram';
 import { startWhatsAppBot, latestQr } from './whatsapp';
+import { handleApiRequest } from './api';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
@@ -13,15 +14,33 @@ const dbUrl = process.env.DATABASE_URL || '<not set>';
 const safeDbUrl = dbUrl.replace(/:\/\/[^@]+@/, '://****:****@');
 console.log(`Using DATABASE_URL: ${safeDbUrl}`);
 
+// Log API token status
+const apiToken = process.env.API_TOKEN;
+console.log(`API_TOKEN: ${apiToken ? 'configured ✅' : 'not set (open access)'}`);
+
 startTelegramBot();
 startWhatsAppBot();
 
 const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+  const url = req.url || '';
+
+  // === API ROUTES ===
+  if (url.startsWith('/api')) {
+    try {
+      await handleApiRequest(req, res);
+    } catch (err: any) {
+      console.error('[API Error]', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Internal server error' }));
+    }
+    return;
+  }
+
+  // === QR CODE / STATUS PAGE ===
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   
   if (latestQr) {
-    // Menggunakan pembuat QR code yang lebih handal
     const qrImageUrl = `https://quickchart.io/qr?text=${encodeURIComponent(latestQr)}&size=300&margin=2`;
     res.end(`
       <html>
@@ -62,4 +81,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Keep-alive server berjalan di port ${PORT}`);
+  console.log(`API endpoints tersedia di http://localhost:${PORT}/api/*`);
 });
