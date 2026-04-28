@@ -8,9 +8,14 @@ export async function getAuthToken() {
     return null;
   }
 
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  // Handle various newline escapes
+  privateKey = privateKey.replace(/\\n/g, '\n');
+  privateKey = privateKey.replace(/"/g, ''); // Remove any accidental quotes
+
   const auth = new google.auth.JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    key: privateKey,
     scopes: SCOPES
   });
 
